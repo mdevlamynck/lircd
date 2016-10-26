@@ -3,3 +3,9 @@
 name = "lircd"
 version = "0.0.1"
 authors = [ "Matthias Devlamynck <matthias.devlamynck@mailoo.org>" ]
+
+[dependencies]
+mioco = "*"
+
+[features]
+unstable = []
