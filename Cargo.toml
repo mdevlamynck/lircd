@@ -1,11 +1,14 @@
 [package]
-
 name = "lircd"
 version = "0.0.1"
 authors = [ "Matthias Devlamynck <matthias.devlamynck@mailoo.org>" ]
 
+[lib]
+name = "lircd"
+
 [dependencies]
 mioco = "*"
+rand = "*"
 
 [features]
 unstable = []

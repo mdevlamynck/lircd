@@ -1,6 +1,7 @@
-mod irc;
-mod net;
+extern crate lircd;
+
+use lircd::net;
 
 fn main() {
-    println!("Hello World");
+    net::run(net::DEFAULT_LISTEN_ADDR);
 }
