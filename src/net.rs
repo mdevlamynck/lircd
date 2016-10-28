@@ -1,67 +1,37 @@
 extern crate mioco;
 
-use std::net::SocketAddr;
 use std::str::FromStr;
-use std::io::{self, Read, Write, BufRead, BufReader};
+use std::io::{self, Write, BufRead, BufReader};
 use self::mioco::tcp::{TcpListener, TcpStream};
-
 use std::sync::{Arc, Mutex};
+use irc::{Irc, Client};
 
 pub const DEFAULT_LISTEN_ADDR : &'static str = "0.0.0.0:6667";
-
-struct Irc<T>
-    where T: Write
-{
-    pub users: Vec<User<T>>,
-}
-
-impl<T> Irc<T>
-    where T: Write
-{
-    pub fn new() -> Irc<T>
-    {
-        Irc::<T> {
-            users: Vec::new()
-        }
-    }
-}
-
-struct User<T>
-    where T: Write
-{
-    pub socket: T,
-}
-
-impl<T> User<T>
-    where T: Write
-{
-    pub fn new(socket: T) -> User<T>
-    {
-        User::<T> {
-            socket: socket,
-        }
-    }
-}
 
 pub fn run(listen_addr: &str)
 {
     let listen_addr = listen_addr.to_string();
 
     mioco::start(move || -> io::Result<()> {
-        let addr = FromStr::from_str(&listen_addr).unwrap();
-        let listener = try!(TcpListener::bind(&addr));
+        let listen_addr = FromStr::from_str(&listen_addr).unwrap_or_else(|e| {
+            error!("{}, is not a valid address, using default {} instead", listen_addr, DEFAULT_LISTEN_ADDR);
+            error!("original error: {}", e);
+            FromStr::from_str(DEFAULT_LISTEN_ADDR).unwrap()
+        });
+
+        let listener = try!(TcpListener::bind(&listen_addr));
 
         let global_state = Arc::new(Mutex::new(Irc::<TcpStream>::new()));
 
         loop {
             let thread_state = global_state.clone();
-            let mut conn = try!(listener.accept());
+            let conn = try!(listener.accept());
 
-            let mut buf_read = BufReader::new(conn.try_clone().unwrap());
+            let buf_read = BufReader::new(conn.try_clone().unwrap());
 
             {
                 let mut state = thread_state.lock().unwrap();
-                state.users.push(User::new(conn));
+                state.users.push(Client::new(conn));
             }
 
             mioco::spawn(move || -> io::Result<()> {
@@ -70,9 +40,9 @@ pub fn run(listen_addr: &str)
                     let message = line.unwrap();
 
                     for mut user in state.users.iter_mut() {
-                        user.socket.write(message.as_bytes());
-                        user.socket.write(b"\n");
-                        user.socket.flush();
+                        try!(user.socket.write(message.as_bytes()));
+                        try!(user.socket.write(b"\n"));
+                        try!(user.socket.flush());
                     }
                 }
 
@@ -85,4 +55,9 @@ pub fn run(listen_addr: &str)
 #[cfg(test)]
 mod test
 {
+    //#[test]
+    //fn test_graciously_ignore_invalid_listen_addr()
+    //{
+    //    super::run("aunris");
+    //}
 }

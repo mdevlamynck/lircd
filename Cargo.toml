@@ -9,6 +9,8 @@ name = "lircd"
 [dependencies]
 mioco = "*"
 rand = "*"
+env_logger = "*"
+log = "*"
 
 [features]
 unstable = []
