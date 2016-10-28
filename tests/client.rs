@@ -7,21 +7,23 @@ use std::thread;
 use rand::{thread_rng, Rng};
 use std::str;
 
-use lircd::net;
+use lircd::{net, config};
 
-const DEFAULT_LISTEN_ADDR : &'static str = "127.0.0.1";
+const TEST_LISTEN_ADDR: &'static str = "127.0.0.1";
 
 fn init_serv() -> (&'static str, u16)
 {
-    let port: u16 = thread_rng().gen_range(1024, 65535);
-    let listen_addr = format!("127.0.0.1:{}", port);
+    let port: u16      = thread_rng().gen_range(1024, 65535);
+    let mut config     = config::Config::new();
+    config.listen_addr = format!("{}:{}", TEST_LISTEN_ADDR, port);
+
     thread::spawn(move || {
-        net::run(&listen_addr);
+        net::run(config);
     });
 
     thread::sleep_ms(1000);
 
-    (DEFAULT_LISTEN_ADDR, port)
+    (TEST_LISTEN_ADDR, port)
 }
 
 #[test]

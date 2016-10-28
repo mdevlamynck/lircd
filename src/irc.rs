@@ -40,7 +40,7 @@ impl<T> Client<T>
 mod test
 {
     #[test]
-    fn test_irc_new()
+    fn irc_new()
     {
         let irc = super::Irc::<Vec<u8>>::new();
 
@@ -48,7 +48,7 @@ mod test
     }
 
     #[test]
-    fn test_client_new()
+    fn client_new()
     {
         let write_buffer = Vec::new();
         let client = super::Client::<Vec<u8>>::new(write_buffer);
