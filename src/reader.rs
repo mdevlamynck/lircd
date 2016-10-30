@@ -2,6 +2,7 @@ extern crate memchr;
 
 use std::io::{self, Read, BufRead, BufReader};
 use std::io::ErrorKind;
+use std::str;
 
 /// IRC max line lenght * max utf8 char size
 pub const MAX_BUFFER_SIZE: usize = 512 * 4;
@@ -42,6 +43,7 @@ impl<R: Read> Read for MaxLengthedBufReader<R>
         self.buf.read(buf)
     }
 }
+
 impl<R: Read> MaxLengthedBufRead for MaxLengthedBufReader<R>
 {
     fn read_until_char_or_max(&mut self, byte: u8, buf: &mut Vec<u8>) -> io::Result<usize>
@@ -90,24 +92,22 @@ impl<R: MaxLengthedBufRead> Iterator for Lines<R>
 
     fn next(&mut self) -> Option<io::Result<String>>
     {
-        let mut buf = Vec::<u8>::new();
-        let mut next_line;
+        let mut next_line = String::new();
         let mut skip_line = false;
         let mut read_result;
         loop {
-            read_result = self.buf.read_until_char_or_max('\n' as u8, &mut buf);
+            read_result = append_to_string(&mut next_line, |b| self.buf.read_until_char_or_max('\n' as u8, b));
             match read_result {
                 Err(ref e) if e.kind() == ErrorKind::Interrupted => {
-                    buf.clear();
+                    next_line.clear();
                     skip_line = true;
                 },
                 _ => {
                     if skip_line {
                         skip_line = false;
-                        buf.clear();
+                        next_line.clear();
                         continue;
                     }
-                    next_line = String::from_utf8_lossy(&buf).into_owned();
                     break;
                 }
             }
@@ -129,13 +129,38 @@ impl<R: MaxLengthedBufRead> Iterator for Lines<R>
     }
 }
 
+fn append_to_string<F>(buf: &mut String, f: F) -> io::Result<usize>
+    where F: FnOnce(&mut Vec<u8>) -> io::Result<usize>
+{
+    struct Guard<'a> { s: &'a mut Vec<u8>, len: usize }
+        impl<'a> Drop for Guard<'a> {
+        fn drop(&mut self) {
+            unsafe { self.s.set_len(self.len); }
+        }
+    }
+
+    unsafe {
+        let mut g = Guard { len: buf.len(), s: buf.as_mut_vec() };
+        let ret = f(g.s);
+        if str::from_utf8(&g.s[g.len..]).is_err() {
+            ret.and_then(|_| {
+                Err(io::Error::new(ErrorKind::InvalidData,
+                               "stream did not contain valid UTF-8"))
+            })
+        } else {
+            g.len = g.s.len();
+            ret
+        }
+    }
+}
+
 #[cfg(test)]
 mod test
 {
     extern crate memchr;
 
     use std::io::ErrorKind;
-    use super::{MaxLengthedBufRead, MaxLengthedBufReader};
+    use super::{MaxLengthedBufRead, MaxLengthedBufReader, MAX_BUFFER_SIZE};
 
     #[test]
     fn returns_error_interrupt_on_line_too_long()

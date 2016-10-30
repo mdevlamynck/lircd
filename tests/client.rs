@@ -1,10 +1,10 @@
+#![cfg(test)]
+
 extern crate lircd;
 extern crate rand;
 
-#[cfg(test)]
-mod test
+mod functional
 {
-
     use std::io::{Write, BufRead, BufReader};
     use std::net::TcpStream;
     use std::thread;
