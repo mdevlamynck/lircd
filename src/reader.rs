@@ -3,6 +3,8 @@ extern crate memchr;
 use std::io::{self, Read, BufRead, BufReader};
 use std::io::ErrorKind;
 
+pub const MAX_BUFFER_SIZE: usize = 1024;
+
 /// Adds the notion of a max length in the lines read by a BufRead.
 pub trait MaxLengthedBufRead : Read
 {
@@ -43,7 +45,6 @@ impl<R: Read> MaxLengthedBufRead for MaxLengthedBufReader<R>
 {
     fn read_until_char_or_max(&mut self, byte: u8, buf: &mut Vec<u8>) -> io::Result<usize>
     {
-        const MAX_BUFFER_SIZE: usize = 1024 * 1024;
         let mut read = 0;
         loop {
             let (found, used) = {
@@ -138,7 +139,7 @@ mod test
     #[test]
     fn returns_error_interrupt_on_line_too_long()
     {
-        let input_buf      = [0u8; (1024 * 1024) + 1];
+        let input_buf      = [0u8; MAX_BUFFER_SIZE + 1];
         let mut output_buf = vec![0u8; 0];
         let mut buf_reader = MaxLengthedBufReader::new(input_buf.as_ref());
 
@@ -150,7 +151,7 @@ mod test
     #[test]
     fn reads_until_end_of_buffer()
     {
-        let input_buf      = [0u8; 1024 * 1024];
+        let input_buf      = [0u8; MAX_BUFFER_SIZE];
         let mut output_buf = vec![0u8; 0];
         let mut buf_reader = MaxLengthedBufReader::new(input_buf.as_ref());
 
@@ -161,7 +162,7 @@ mod test
     #[test]
     fn reads_until_char()
     {
-        let mut input_buf  = [0u8; 1024 * 1024 + 100];
+        let mut input_buf  = [0u8; MAX_BUFFER_SIZE + 100];
         input_buf[9]       = '\n' as u8;
         input_buf[19]      = '\n' as u8;
         let mut output_buf = vec![0u8; 0];
@@ -175,13 +176,13 @@ mod test
     #[test]
     fn reads_until_char_or_max_or_end()
     {
-        let mut input_buf           = [0u8; 1024 * 1024 + 100];
-        input_buf[9]                = '\n' as u8;
-        input_buf[19]               = '\n' as u8;
-        input_buf[1024 * 1024 + 29] = '\n' as u8;
-        input_buf[1024 * 1024 + 39] = '\n' as u8;
-        let mut output_buf          = vec![0u8; 0];
-        let mut buf_reader          = MaxLengthedBufReader::new(input_buf.as_ref());
+        let mut input_buf               = [0u8; MAX_BUFFER_SIZE + 100];
+        input_buf[9]                    = '\n' as u8;
+        input_buf[19]                   = '\n' as u8;
+        input_buf[MAX_BUFFER_SIZE + 29] = '\n' as u8;
+        input_buf[MAX_BUFFER_SIZE + 39] = '\n' as u8;
+        let mut output_buf              = vec![0u8; 0];
+        let mut buf_reader              = MaxLengthedBufReader::new(input_buf.as_ref());
 
         // 1st \n
         let result = buf_reader.read_until_char_or_max('\n' as u8, &mut output_buf);
@@ -227,13 +228,13 @@ mod test
     #[test]
     fn discards_too_long_lines()
     {
-        let mut input_buf           = [0u8; 1024 * 1024 + 100];
-        input_buf[9]                = '\n' as u8;
-        input_buf[19]               = '\n' as u8;
-        input_buf[1024 * 1024 + 29] = '\n' as u8;
-        input_buf[1024 * 1024 + 39] = '\n' as u8;
-        let buf_reader              = MaxLengthedBufReader::new(input_buf.as_ref());
-        let mut iterator            = buf_reader.lines_without_too_long();
+        let mut input_buf               = [0u8; MAX_BUFFER_SIZE + 100];
+        input_buf[9]                    = '\n' as u8;
+        input_buf[19]                   = '\n' as u8;
+        input_buf[MAX_BUFFER_SIZE + 29] = '\n' as u8;
+        input_buf[MAX_BUFFER_SIZE + 39] = '\n' as u8;
+        let buf_reader                  = MaxLengthedBufReader::new(input_buf.as_ref());
+        let mut iterator                = buf_reader.lines_without_too_long();
 
         // 1st \n
         let result = iterator.next();
