@@ -3,7 +3,8 @@ extern crate memchr;
 use std::io::{self, Read, BufRead, BufReader};
 use std::io::ErrorKind;
 
-pub const MAX_BUFFER_SIZE: usize = 1024;
+/// IRC max line lenght * max utf8 char size
+pub const MAX_BUFFER_SIZE: usize = 512 * 4;
 
 /// Adds the notion of a max length in the lines read by a BufRead.
 pub trait MaxLengthedBufRead : Read
