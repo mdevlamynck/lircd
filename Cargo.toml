@@ -11,6 +11,7 @@ mioco = "*"
 rand = "*"
 env_logger = "*"
 log = "*"
+memchr = "*"
 
 [features]
 unstable = []

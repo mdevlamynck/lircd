@@ -1,32 +1,47 @@
 extern crate mioco;
+extern crate memchr;
 
-use std::io::{self, Write, BufRead, BufReader};
+use std::io::Write;
 use self::mioco::tcp::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use irc::{Irc, Client};
 use config::Config;
+use errors::NetResult;
+use reader::{MaxLengthedBufRead, MaxLengthedBufReader};
 
-fn root_mioco_routine(config: Config) -> io::Result<()>
+pub fn run(config: Config)
 {
-    let listen_addr  = config.listen_addr.parse().expect("Unable to parse socket address");
+    let result = mioco::start(move || -> NetResult {
+        root_mioco_routine(config)
+    }).unwrap();
 
+    match result {
+        Ok(_)    => println!("Terminated successfully"),
+        Err(err) => println!("Error occured: {}", err),
+    };
+}
+
+fn root_mioco_routine(config: Config) -> NetResult
+{
+    let listen_addr  = try!(config.listen_addr.parse());
     let listener     = try!(TcpListener::bind(&listen_addr));
+
     let global_state = Arc::new(Mutex::new(Irc::<TcpStream>::new()));
 
     loop {
-        let thread_state = global_state.clone();
-        let conn = try!(listener.accept());
-
-        let buf_read = BufReader::new(conn.try_clone().unwrap());
+        let socket        = try!(listener.accept());
+        let socket_reader = MaxLengthedBufReader::new(try!(socket.try_clone()));
 
         {
-            let mut state = thread_state.lock().unwrap();
-            state.users.push(Client::new(conn));
+            let mut state = global_state.lock().unwrap();
+            state.users.push(Client::new(socket));
         }
 
-        mioco::spawn(move || -> io::Result<()> {
-            for line in buf_read.lines() {
-                let mut state = thread_state.lock().unwrap();
+        let routine_state = global_state.clone();
+
+        mioco::spawn(move || -> NetResult {
+            for line in socket_reader.lines_without_too_long() {
+                let mut state = routine_state.lock().unwrap();
                 let message = line.unwrap();
 
                 for mut user in state.users.iter_mut() {
@@ -40,32 +55,42 @@ fn root_mioco_routine(config: Config) -> io::Result<()>
         });
     }
 }
-pub fn run(config: Config)
-{
-    mioco::start(move || -> io::Result<()> {
-        root_mioco_routine(config)
-    });
-}
 
 #[cfg(test)]
 mod test
 {
     extern crate mioco;
+    extern crate memchr;
 
     use config::Config;
-    use std::io;
+    use errors::NetResult;
     use std::error::Error;
 
     #[test]
-    fn test_raise_error_on_invalid_listen_addr()
+    fn raise_error_on_invalid_listen_address()
     {
         let mut config = Config::default();
         config.listen_addr = "definitely not a network address".to_string();
 
-        let result = mioco::spawn(move || -> io::Result<()> {
+        let result = mioco::spawn(move || -> NetResult {
             super::root_mioco_routine(config)
-        }).join();
+        }).join().ok().unwrap();
 
         assert!(result.is_err());
+        assert_eq!("invalid IP address syntax", result.err().unwrap().description());
+    }
+
+    #[test]
+    fn raise_error_on_fail_to_bind_address()
+    {
+        let mut config = Config::default();
+        config.listen_addr = "127.0.0.1:1".to_string();
+
+        let result = mioco::spawn(move || -> NetResult {
+            super::root_mioco_routine(config)
+        }).join().ok().unwrap();
+
+        assert!(result.is_err());
+        assert_eq!("permission denied", result.err().unwrap().description());
     }
 }

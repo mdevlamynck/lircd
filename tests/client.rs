@@ -1,68 +1,85 @@
 extern crate lircd;
 extern crate rand;
 
-use std::io::{Read, Write, BufRead, BufReader};
-use std::net::TcpStream;
-use std::thread;
-use rand::{thread_rng, Rng};
-use std::str;
-
-use lircd::{net, config};
-
-const TEST_LISTEN_ADDR: &'static str = "127.0.0.1";
-
-fn init_serv() -> (&'static str, u16)
+#[cfg(test)]
+mod test
 {
-    let port: u16      = thread_rng().gen_range(1024, 65535);
-    let mut config     = config::Config::new();
-    config.listen_addr = format!("{}:{}", TEST_LISTEN_ADDR, port);
 
-    thread::spawn(move || {
-        net::run(config);
-    });
+    use std::io::{Write, BufRead, BufReader};
+    use std::net::TcpStream;
+    use std::thread;
+    use std::time;
+    use rand::{thread_rng, Rng};
+    use std::str;
 
-    thread::sleep_ms(1000);
+    use lircd::{net, config};
 
-    (TEST_LISTEN_ADDR, port)
-}
+    const TEST_LISTEN_ADDR: &'static str = "127.0.0.1";
 
-#[test]
-fn can_connect()
-{
-    let mut socket = TcpStream::connect(init_serv()).unwrap();
-}
+    fn init_serv() -> (&'static str, u16)
+    {
+        let port: u16      = thread_rng().gen_range(1024, 65535);
+        let mut config     = config::Config::new();
+        config.listen_addr = format!("{}:{}", TEST_LISTEN_ADDR, port);
 
-#[test]
-fn round_echo_server()
-{
-    let server = init_serv();
-    let mut client1 = TcpStream::connect(server).unwrap();
-    let mut client2 = TcpStream::connect(server).unwrap();
+        thread::spawn(move || {
+            net::run(config);
+        });
 
-    let mut client1_reader = BufReader::new(client1.try_clone().unwrap());
-    let mut client2_reader = BufReader::new(client2.try_clone().unwrap());
+        thread::sleep(time::Duration::from_millis(100));
 
-    client1.write(b"Hi!\n");
-    client1.flush();
+        (TEST_LISTEN_ADDR, port)
+    }
 
-    let mut client1_buffer = String::new();
-    let mut client2_buffer = String::new();
+    #[test]
+    fn can_connect()
+    {
+        let _ = TcpStream::connect(init_serv()).unwrap();
+    }
 
-    client1_reader.read_line(&mut client1_buffer);
-    client2_reader.read_line(&mut client2_buffer);
+    #[test]
+    fn multiple_clients_can_connect()
+    {
+        let server = init_serv();
+        let _ = TcpStream::connect(server).unwrap();
+        let _ = TcpStream::connect(server).unwrap();
+        let _ = TcpStream::connect(server).unwrap();
+        let _ = TcpStream::connect(server).unwrap();
+        let _ = TcpStream::connect(server).unwrap();
+    }
 
-    assert_eq!("Hi!\n", &client1_buffer);
-    assert_eq!("Hi!\n", &client2_buffer);
+    #[test]
+    fn round_echo_server()
+    {
+        let server = init_serv();
+        let mut client1 = TcpStream::connect(server).unwrap();
+        let mut client2 = TcpStream::connect(server).unwrap();
 
-    client2.write(b"It works!\n");
-    client2.flush();
+        let mut client1_reader = BufReader::new(client1.try_clone().unwrap());
+        let mut client2_reader = BufReader::new(client2.try_clone().unwrap());
 
-    client1_buffer.clear();
-    client2_buffer.clear();
+        let _ = client1.write(b"Hi!\n");
+        let _ = client1.flush();
 
-    client1_reader.read_line(&mut client1_buffer);
-    client2_reader.read_line(&mut client2_buffer);
+        let mut client1_buffer = String::new();
+        let mut client2_buffer = String::new();
 
-    assert_eq!("It works!\n", &client1_buffer);
-    assert_eq!("It works!\n", &client2_buffer);
+        let _ = client1_reader.read_line(&mut client1_buffer);
+        let _ = client2_reader.read_line(&mut client2_buffer);
+
+        assert_eq!("Hi!\n", &client1_buffer);
+        assert_eq!("Hi!\n", &client2_buffer);
+
+        let _ = client2.write(b"It works!\n");
+        let _ = client2.flush();
+
+        client1_buffer.clear();
+        client2_buffer.clear();
+
+        let _ = client1_reader.read_line(&mut client1_buffer);
+        let _ = client2_reader.read_line(&mut client2_buffer);
+
+        assert_eq!("It works!\n", &client1_buffer);
+        assert_eq!("It works!\n", &client2_buffer);
+    }
 }
