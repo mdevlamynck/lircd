@@ -23,7 +23,8 @@ pub trait MaxLengthedBufRead : Read
 
 pub struct MaxLengthedBufReader<R: Read>
 {
-    buf: BufReader<R>,
+    buf:        BufReader<R>,
+    max_length: usize,
 }
 
 impl<R: Read> MaxLengthedBufReader<R>
@@ -31,8 +32,14 @@ impl<R: Read> MaxLengthedBufReader<R>
     pub fn new(r: R) -> MaxLengthedBufReader<R>
     {
         MaxLengthedBufReader::<R> {
-            buf: BufReader::new(r),
+            buf:        BufReader::new(r),
+            max_length: MAX_BUFFER_SIZE,
         }
+    }
+
+    pub fn set_max_line(&mut self, max_length: usize)
+    {
+        self.max_length = max_length;
     }
 }
 
@@ -70,7 +77,7 @@ impl<R: Read> MaxLengthedBufRead for MaxLengthedBufReader<R>
             self.buf.consume(used);
             read += used;
 
-            if read > MAX_BUFFER_SIZE {
+            if read > self.max_length {
                 return Err(io::Error::new(ErrorKind::Interrupted, "Buffer reached max length"));
             }
 
@@ -168,6 +175,22 @@ mod test
         let input_buf      = [0u8; MAX_BUFFER_SIZE + 1];
         let mut output_buf = vec![0u8; 0];
         let mut buf_reader = MaxLengthedBufReader::new(input_buf.as_ref());
+
+        let result = buf_reader.read_until_char_or_max(0xA, &mut output_buf);
+        assert!(result.is_err());
+        assert_eq!(ErrorKind::Interrupted, result.err().unwrap().kind());
+    }
+
+    #[test]
+    fn max_length_is_updatable()
+    {
+        const SHORTED_MAX_LINE: usize = 10;
+        let input_buf                 = [0u8; SHORTED_MAX_LINE + 1];
+        let mut output_buf            = vec![0u8; 0];
+        let mut buf_reader            = MaxLengthedBufReader::new(input_buf.as_ref());
+
+        buf_reader.set_max_line(SHORTED_MAX_LINE);
+        assert_eq!(SHORTED_MAX_LINE, buf_reader.max_length);
 
         let result = buf_reader.read_until_char_or_max(0xA, &mut output_buf);
         assert!(result.is_err());
