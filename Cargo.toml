@@ -8,11 +8,13 @@ name = "lircd"
 
 [dependencies]
 mioco = "*"
-rand = "*"
 env_logger = "*"
 log = "*"
 memchr = "*"
 simple-signal = "*"
+
+[dev-dependencies]
+rand = "*"
 
 [features]
 unstable = []
