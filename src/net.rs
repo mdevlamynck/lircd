@@ -1,8 +1,10 @@
 extern crate mioco;
 extern crate memchr;
+extern crate simple_signal;
 
 use std::io::Write;
 use self::mioco::tcp::{TcpListener, TcpStream};
+use self::simple_signal::{Signals, Signal};
 use std::sync::{Arc, Mutex};
 use irc::{Irc, Client};
 use config::Config;
@@ -11,14 +13,33 @@ use reader::{MaxLengthedBufRead, MaxLengthedBufReader};
 
 pub fn run(config: Config)
 {
-    let result = mioco::start(move || -> NetResult {
+    let (shutdown_tx, shutdown_rx) = mioco::sync::mpsc::channel();
+
+    let join_handle = mioco::spawn(move || -> NetResult {
+        let _ = mioco::spawn(move || {
+            let _ = shutdown_rx.recv();
+            mioco::shutdown();
+        });
+
         root_mioco_routine(config)
-    }).unwrap();
+    });
+
+    Signals::set_handler(&[Signal::Term, Signal::Int], move |signals| {
+        info!("Recieved signal {:?}, stopping...", signals);
+        shutdown_tx.send(()).unwrap();
+    });
+
+    let result = join_handle.join();
 
     match result {
-        Ok(_)    => println!("Terminated successfully"),
-        Err(err) => println!("Error occured: {}", err),
-    };
+        Ok(inner_result) => {
+            match inner_result {
+                Ok(_)    => info!("Terminated successfully"),
+                Err(err) => error!("Error occured: {}", err),
+            };
+        },
+        Err(_) => info!("Stopped by signal"),
+    }
 }
 
 fn root_mioco_routine(config: Config) -> NetResult
@@ -69,28 +90,36 @@ mod test
     #[test]
     fn raise_error_on_invalid_listen_address()
     {
-        let mut config = Config::default();
-        config.listen_addr = "definitely not a network address".to_string();
+        let _ = mioco::start(|| {
+            let mut config = Config::default();
+            config.listen_addr = "definitely not a network address".to_string();
 
-        let result = mioco::spawn(move || -> NetResult {
-            super::root_mioco_routine(config)
-        }).join().ok().unwrap();
+            let result = mioco::spawn(move || -> NetResult {
+                super::root_mioco_routine(config)
+            }).join().ok().unwrap();
 
-        assert!(result.is_err());
-        assert_eq!("invalid IP address syntax", result.err().unwrap().description());
+            assert!(result.is_err());
+            assert_eq!("invalid IP address syntax", result.err().unwrap().description());
+
+            mioco::shutdown();
+        });
     }
 
     #[test]
     fn raise_error_on_fail_to_bind_address()
     {
-        let mut config = Config::default();
-        config.listen_addr = "127.0.0.1:1".to_string();
+        let _ = mioco::start(|| {
+            let mut config = Config::default();
+            config.listen_addr = "127.0.0.1:1".to_string();
 
-        let result = mioco::spawn(move || -> NetResult {
-            super::root_mioco_routine(config)
-        }).join().ok().unwrap();
+            let result = mioco::spawn(move || -> NetResult {
+                super::root_mioco_routine(config)
+            }).join().ok().unwrap();
 
-        assert!(result.is_err());
-        assert_eq!("permission denied", result.err().unwrap().description());
+            assert!(result.is_err());
+            assert_eq!("permission denied", result.err().unwrap().description());
+
+            mioco::shutdown();
+        });
     }
 }
