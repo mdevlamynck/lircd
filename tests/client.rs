@@ -12,7 +12,7 @@ mod functional
     use rand::{thread_rng, Rng};
     use std::str;
 
-    use lircd::{net, config};
+    use lircd::{net, config, irc};
 
     const TEST_LISTEN_ADDR: &'static str = "127.0.0.1";
 
@@ -23,7 +23,7 @@ mod functional
         config.listen_addr = format!("{}:{}", TEST_LISTEN_ADDR, port);
 
         thread::spawn(move || {
-            net::run(config);
+            net::run(config, irc::IrcProtocol::new());
         });
 
         thread::sleep(time::Duration::from_millis(100));

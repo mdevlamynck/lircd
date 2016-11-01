@@ -2,16 +2,32 @@ extern crate mioco;
 extern crate memchr;
 extern crate simple_signal;
 
-use std::io::Write;
 use self::mioco::tcp::{TcpListener, TcpStream};
+use self::mioco::unix::{UnixListener, UnixStream};
 use self::simple_signal::{Signals, Signal};
-use std::sync::{Arc, Mutex};
-use irc::{Irc, Client};
 use config::Config;
 use errors::NetResult;
-use reader::{MaxLengthedBufRead, MaxLengthedBufReader};
+use std::path::Path;
 
-pub fn run(config: Config)
+pub trait StatefullProtocol
+{
+    type I;
+    type O;
+    type H: StatefullHandle;
+
+    fn new_connection(&self, input: Self::I, output: Self::O) -> Self::H;
+
+    fn handle_request(&self, request: String) -> NetResult;
+}
+
+pub trait StatefullHandle
+{
+    fn consume(self) -> NetResult;
+}
+
+pub fn run<P>(config: Config, protocol: P)
+    where P: StatefullProtocol<I = TcpStream, O = TcpStream> + Send + 'static,
+          P::H: Send + 'static
 {
     let (shutdown_tx, shutdown_rx) = mioco::sync::mpsc::channel();
 
@@ -21,7 +37,7 @@ pub fn run(config: Config)
             mioco::shutdown();
         });
 
-        root_mioco_routine(config)
+        tcp_listener(config, protocol)
     });
 
     Signals::set_handler(&[Signal::Term, Signal::Int], move |signals| {
@@ -42,35 +58,42 @@ pub fn run(config: Config)
     }
 }
 
-fn root_mioco_routine(config: Config) -> NetResult
+fn tcp_listener<P>(config: Config, protocol: P) -> NetResult
+    where P: StatefullProtocol<I = TcpStream, O = TcpStream>,
+          P::H: Send + 'static
 {
     let listen_addr  = try!(config.listen_addr.parse());
     let listener     = try!(TcpListener::bind(&listen_addr));
 
-    let global_state = Arc::new(Mutex::new(Irc::<TcpStream>::new()));
-
     loop {
-        let socket        = try!(listener.accept());
-        let socket_reader = MaxLengthedBufReader::new(try!(socket.try_clone()));
+        let input_socket  = try!(listener.accept());
+        let output_socket = try!(input_socket.try_clone());
 
-        {
-            let mut state = global_state.lock().unwrap();
-            state.users.push(Client::new(socket));
-        }
-
-        let routine_state = global_state.clone();
+        let handle    = protocol.new_connection(input_socket, output_socket);
 
         mioco::spawn(move || -> NetResult {
-            for line in socket_reader.lines_without_too_long() {
-                let mut state = routine_state.lock().unwrap();
-                let message = line.unwrap();
+            try!(handle.consume());
 
-                for mut user in state.users.iter_mut() {
-                    try!(user.socket.write(message.as_bytes()));
-                    try!(user.socket.write(b"\n"));
-                    try!(user.socket.flush());
-                }
-            }
+            Ok(())
+        });
+    }
+}
+
+fn unix_listener<P>(config: Config, protocol: P) -> NetResult
+    where P: StatefullProtocol<I = UnixStream, O = UnixStream>,
+          P::H: Send + 'static
+{
+    let listen_addr  = Path::new(&config.listen_addr);
+    let listener     = try!(UnixListener::bind(&listen_addr));
+
+    loop {
+        let input_socket  = try!(listener.accept());
+        let output_socket = try!(input_socket.try_clone());
+
+        let handle    = protocol.new_connection(input_socket, output_socket);
+
+        mioco::spawn(move || -> NetResult {
+            try!(handle.consume());
 
             Ok(())
         });
@@ -81,11 +104,40 @@ fn root_mioco_routine(config: Config) -> NetResult
 mod test
 {
     extern crate mioco;
-    extern crate memchr;
 
     use config::Config;
     use errors::NetResult;
     use std::error::Error;
+    use self::mioco::tcp::TcpStream;
+    use super::{StatefullProtocol, StatefullHandle};
+
+    struct DummyProtocol;
+    struct DummyHandle;
+
+    impl StatefullProtocol for DummyProtocol
+    {
+        type I = TcpStream;
+        type O = TcpStream;
+        type H = DummyHandle;
+
+        fn new_connection(&self, input: Self::I, output: Self::O) -> Self::H
+        {
+            DummyHandle {}
+        }
+
+        fn handle_request(&self, request: String) -> NetResult
+        {
+            Ok(())
+        }
+    }
+
+    impl StatefullHandle for DummyHandle
+    {
+        fn consume(self) -> NetResult
+        {
+            Ok(())
+        }
+    }
 
     #[test]
     fn raise_error_on_invalid_listen_address()
@@ -95,7 +147,8 @@ mod test
             config.listen_addr = "definitely not a network address".to_string();
 
             let result = mioco::spawn(move || -> NetResult {
-                super::root_mioco_routine(config)
+                
+                super::tcp_listener(config, DummyProtocol {})
             }).join().ok().unwrap();
 
             assert!(result.is_err());
@@ -113,7 +166,7 @@ mod test
             config.listen_addr = "127.0.0.1:1".to_string();
 
             let result = mioco::spawn(move || -> NetResult {
-                super::root_mioco_routine(config)
+                super::tcp_listener(config, DummyProtocol {})
             }).join().ok().unwrap();
 
             assert!(result.is_err());
@@ -121,5 +174,17 @@ mod test
 
             mioco::shutdown();
         });
+    }
+
+    #[test]
+    fn calls_new_connection()
+    {
+        // TODO
+    }
+
+    #[test]
+    fn calls_consume()
+    {
+        // TODO
     }
 }

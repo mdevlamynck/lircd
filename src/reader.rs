@@ -15,6 +15,8 @@ pub trait MaxLengthedBufRead : Read
     /// fautive line is discarded until a new line.
     fn read_until_char_or_max(&mut self, byte: u8, buf: &mut Vec<u8>) -> io::Result<usize>;
 
+    /// This function acts like lines from BufRead. The only difference is that the function will
+    /// skip over lines wich are longer than self.max_length.
     fn lines_without_too_long(self) -> Lines<Self> where Self: Sized
     {
         Lines { buf: self }
