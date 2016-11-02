@@ -6,93 +6,93 @@ use self::mioco::sync::{Mutex, RwLock};
 use errors::NetResult;
 use net::{StatefullProtocol, StatefullHandle};
 use reader::{MaxLengthedBufRead, MaxLengthedBufReader};
-use std::marker::PhantomData;
 
-pub struct IrcProtocol<I, O: 'static>
+pub struct IrcProtocol<O: 'static>
 {
-    state:      Arc<RwLock<Irc<O>>>,
-    input_type: PhantomData<I>,
+    state: Arc<RwLock<Irc<O>>>,
 }
 
-impl<I, O> IrcProtocol<I, O>
+impl<O> IrcProtocol<O>
 {
     pub fn new() -> Self
     {
-        IrcProtocol::<I, O> {
-            state:      Arc::new(RwLock::new(Irc::<O>::new())),
-            input_type: PhantomData,
+        IrcProtocol::<O> {
+            state: Arc::new(RwLock::new(Irc::<O>::new())),
         }
     }
 
     pub fn clone(&self) -> Self
     {
-        IrcProtocol::<I, O> {
-            state:      self.state.clone(),
-            input_type: PhantomData,
+        IrcProtocol::<O> {
+            state: self.state.clone(),
         }
     }
-}
 
-pub struct IrcHandle<I, O: 'static>
-    where I: Read,
-{
-    input: MaxLengthedBufReader<I>,
-    state: IrcProtocol<I, O>,
-}
-
-impl<I, O> IrcHandle<I, O>
-    where I: Read,
-          O: Write
-{
-    pub fn new(input: I, state_holder: &IrcProtocol<I, O>) -> IrcHandle<I, O>
-    {
-        IrcHandle::<I, O> {
-            input: MaxLengthedBufReader::new(input),
-            state: state_holder.clone(),
-        }
-    }
-}
-
-impl<I, O> StatefullProtocol for IrcProtocol<I, O>
-    where I: Read,
-          O: Write
-{
-    type I = I;
-    type O = O;
-    type H = IrcHandle<I, O>;
-
-    fn new_connection(&self, input: Self::I, output: Self::O) -> Self::H
+    fn add_client(&self, client: Client<O>)
     {
         let mut state = self.state.write().unwrap();
-        state.users.push(Client::new(output));
+        state.users.push(client);
+    }
+}
 
-        IrcHandle::<I, O>::new(input, self)
+pub struct IrcHandle<O: 'static>
+{
+    protocol: IrcProtocol<O>,
+    client:   Client<O>,
+}
+
+impl<O> IrcHandle<O>
+    where O: Write
+{
+    pub fn new(state_holder: &IrcProtocol<O>, client: Client<O>) -> IrcHandle<O>
+    {
+        IrcHandle::<O> {
+            protocol: state_holder.clone(),
+            client:   client
+        }
+    }
+}
+
+impl<O> StatefullProtocol for IrcProtocol<O>
+    where O: Write
+{
+    type O = O;
+    type H = IrcHandle<O>;
+
+    fn new_connection(&self, output: Self::O) -> Self::H
+    {
+        let client = Client::new(output);
+        self.add_client(client.clone());
+
+        IrcHandle::<O>::new(self, client)
+    }
+}
+
+impl<O> StatefullHandle for IrcHandle<O>
+    where O: Write
+{
+    fn consume<I: Read>(self, input: I) -> NetResult
+    {
+        let input_reader = MaxLengthedBufReader::new(input);
+
+        for line in input_reader.lines_without_too_long() {
+            let request = line.unwrap();
+
+            try!(self.handle_request(request));
+        }
+
+        Ok(())
     }
 
     fn handle_request(&self, request: String) -> NetResult
     {
-        let state = self.state.read().unwrap();
+        let state = self.protocol.state.read().unwrap();
+
         for user in state.users.iter() {
             let mut output = user.output.lock().unwrap();
             try!(output.write(request.as_bytes()));
             try!(output.write(b"\n"));
             try!(output.flush());
-        }
-
-        Ok(())
-    }
-}
-
-impl<I, O> StatefullHandle for IrcHandle<I, O>
-    where I: Read,
-          O: Write
-{
-    fn consume(self) -> NetResult
-    {
-        for line in self.input.lines_without_too_long() {
-            let request = line.unwrap();
-
-            try!(self.state.handle_request(request));
         }
 
         Ok(())
@@ -118,7 +118,7 @@ impl<O> Irc<O>
 #[derive(Debug)]
 pub struct Client<O: 'static>
 {
-    pub output: Mutex<O>,
+    pub output: Arc<Mutex<O>>,
 }
 
 impl<O> Client<O>
@@ -126,7 +126,14 @@ impl<O> Client<O>
     pub fn new(output: O) -> Self
     {
         Client::<O> {
-            output: Mutex::new(output),
+            output: Arc::new(Mutex::new(output)),
+        }
+    }
+
+    pub fn clone(&self) -> Self
+    {
+        Client::<O> {
+            output: self.output.clone(),
         }
     }
 }

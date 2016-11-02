@@ -2,6 +2,7 @@ extern crate mioco;
 extern crate memchr;
 extern crate simple_signal;
 
+use std::io::Read;
 use self::mioco::tcp::{TcpListener, TcpStream};
 use self::mioco::unix::{UnixListener, UnixStream};
 use self::simple_signal::{Signals, Signal};
@@ -11,22 +12,21 @@ use std::path::Path;
 
 pub trait StatefullProtocol
 {
-    type I;
     type O;
     type H: StatefullHandle;
 
-    fn new_connection(&self, input: Self::I, output: Self::O) -> Self::H;
-
-    fn handle_request(&self, request: String) -> NetResult;
+    fn new_connection(&self, output: Self::O) -> Self::H;
 }
 
 pub trait StatefullHandle
 {
-    fn consume(self) -> NetResult;
+    fn consume<I: Read>(self, input: I) -> NetResult;
+
+    fn handle_request(&self, request: String) -> NetResult;
 }
 
 pub fn run<P>(config: Config, protocol: P)
-    where P: StatefullProtocol<I = TcpStream, O = TcpStream> + Send + 'static,
+    where P: StatefullProtocol<O = TcpStream> + Send + 'static,
           P::H: Send + 'static
 {
     let (shutdown_tx, shutdown_rx) = mioco::sync::mpsc::channel();
@@ -59,7 +59,7 @@ pub fn run<P>(config: Config, protocol: P)
 }
 
 fn tcp_listener<P>(config: Config, protocol: P) -> NetResult
-    where P: StatefullProtocol<I = TcpStream, O = TcpStream>,
+    where P: StatefullProtocol<O = TcpStream>,
           P::H: Send + 'static
 {
     let listen_addr  = try!(config.listen_addr.parse());
@@ -69,10 +69,10 @@ fn tcp_listener<P>(config: Config, protocol: P) -> NetResult
         let input_socket  = try!(listener.accept());
         let output_socket = try!(input_socket.try_clone());
 
-        let handle    = protocol.new_connection(input_socket, output_socket);
+        let handle    = protocol.new_connection(output_socket);
 
         mioco::spawn(move || -> NetResult {
-            try!(handle.consume());
+            try!(handle.consume(input_socket));
 
             Ok(())
         });
@@ -80,7 +80,7 @@ fn tcp_listener<P>(config: Config, protocol: P) -> NetResult
 }
 
 fn unix_listener<P>(config: Config, protocol: P) -> NetResult
-    where P: StatefullProtocol<I = UnixStream, O = UnixStream>,
+    where P: StatefullProtocol<O = UnixStream>,
           P::H: Send + 'static
 {
     let listen_addr  = Path::new(&config.listen_addr);
@@ -90,10 +90,10 @@ fn unix_listener<P>(config: Config, protocol: P) -> NetResult
         let input_socket  = try!(listener.accept());
         let output_socket = try!(input_socket.try_clone());
 
-        let handle    = protocol.new_connection(input_socket, output_socket);
+        let handle    = protocol.new_connection(output_socket);
 
         mioco::spawn(move || -> NetResult {
-            try!(handle.consume());
+            try!(handle.consume(input_socket));
 
             Ok(())
         });
@@ -116,24 +116,23 @@ mod test
 
     impl StatefullProtocol for DummyProtocol
     {
-        type I = TcpStream;
         type O = TcpStream;
         type H = DummyHandle;
 
-        fn new_connection(&self, input: Self::I, output: Self::O) -> Self::H
+        fn new_connection(&self, output: Self::O) -> Self::H
         {
             DummyHandle {}
-        }
-
-        fn handle_request(&self, request: String) -> NetResult
-        {
-            Ok(())
         }
     }
 
     impl StatefullHandle for DummyHandle
     {
-        fn consume(self) -> NetResult
+        fn consume<I = TcpStream>(self, input: I) -> NetResult
+        {
+            Ok(())
+        }
+
+        fn handle_request(&self, request: String) -> NetResult
         {
             Ok(())
         }
