@@ -1,7 +1,7 @@
 extern crate mioco;
-extern crate memchr;
 extern crate simple_signal;
 
+use std;
 use std::io::Read;
 use self::mioco::tcp::{TcpListener, TcpStream};
 use self::mioco::unix::{UnixListener, UnixStream};
@@ -9,6 +9,7 @@ use self::simple_signal::{Signals, Signal};
 use config::Config;
 use errors::NetResult;
 use std::path::Path;
+use common_api::{Listen, Stream, Spawn, Async, Blocking};
 
 pub trait StatefullProtocol
 {
@@ -37,7 +38,11 @@ pub fn run<P>(config: Config, protocol: P)
             mioco::shutdown();
         });
 
-        tcp_listener(config, protocol)
+        if config.use_async {
+            try!(listen::<mioco::tcp::TcpListener, Async, P>(protocol, &config.listen_addr));
+        }
+
+        Ok(())
     });
 
     Signals::set_handler(&[Signal::Term, Signal::Int], move |signals| {
@@ -58,41 +63,21 @@ pub fn run<P>(config: Config, protocol: P)
     }
 }
 
-fn tcp_listener<P>(config: Config, protocol: P) -> NetResult
-    where P: StatefullProtocol<O = TcpStream>,
+fn listen<L, S, P>(protocol: P, address: &str) -> NetResult
+    where L: Listen,
+          S: Spawn<NetResult>,
+          P: StatefullProtocol<O = L::Stream>,
           P::H: Send + 'static
 {
-    let listen_addr  = try!(config.listen_addr.parse());
-    let listener     = try!(TcpListener::bind(&listen_addr));
+    let listener = try!(L::bind(address));
 
     loop {
         let input_socket  = try!(listener.accept());
         let output_socket = try!(input_socket.try_clone());
 
-        let handle    = protocol.new_connection(output_socket);
+        let handle        = protocol.new_connection(output_socket);
 
-        mioco::spawn(move || -> NetResult {
-            try!(handle.consume(input_socket));
-
-            Ok(())
-        });
-    }
-}
-
-fn unix_listener<P>(config: Config, protocol: P) -> NetResult
-    where P: StatefullProtocol<O = UnixStream>,
-          P::H: Send + 'static
-{
-    let listen_addr  = Path::new(&config.listen_addr);
-    let listener     = try!(UnixListener::bind(&listen_addr));
-
-    loop {
-        let input_socket  = try!(listener.accept());
-        let output_socket = try!(input_socket.try_clone());
-
-        let handle    = protocol.new_connection(output_socket);
-
-        mioco::spawn(move || -> NetResult {
+        S::spawn(move || -> NetResult {
             try!(handle.consume(input_socket));
 
             Ok(())

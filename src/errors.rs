@@ -54,3 +54,4 @@ impl From<net::AddrParseError> for NetError
 }
 
 pub type NetResult = result::Result<(), NetError>;
+pub type Result<T> = result::Result<T, NetError>;

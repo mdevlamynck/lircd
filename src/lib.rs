@@ -6,3 +6,4 @@ pub mod net;
 pub mod config;
 pub mod errors;
 pub mod reader;
+pub mod common_api;
