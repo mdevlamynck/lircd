@@ -4,118 +4,6 @@ use std;
 use std::io::{Read, Write};
 use errors::Result;
 use std::thread;
-use std::sync::LockResult;
-use std::sync::MutexGuard;
-use std::sync::RwLockReadGuard;
-use std::sync::RwLockWriteGuard;
-
-pub trait JoinHandle<T>: Sized
-    where T: Send + 'static
-{
-    fn join(self: Self) -> thread::Result<T>;
-}
-
-impl<T> JoinHandle<T> for mioco::JoinHandle<T>
-      where T: Send + 'static
-{
-    fn join(self: Self) -> thread::Result<T>
-    {
-        Self::join(self)
-    }
-}
-
-impl<T> JoinHandle<T> for thread::JoinHandle<T>
-      where T: Send + 'static
-{
-    fn join(self: Self) -> thread::Result<T>
-    {
-        Self::join(self)
-    }
-}
-
-pub trait Mutex<T>
-    where T: Sized
-{
-    fn new(t: T) -> Self;
-
-    fn lock(&self) -> LockResult<MutexGuard<T>>;
-}
-
-impl<T> Mutex<T> for mioco::sync::Mutex<T>
-    where T: Sized
-{
-    fn new(t: T) -> Self
-    {
-        Self::new(t)
-    }
-
-    fn lock(&self) -> LockResult<MutexGuard<T>>
-    {
-        Self::lock(self)
-    }
-}
-
-impl<T> Mutex<T> for std::sync::Mutex<T>
-    where T: Sized
-{
-    fn new(t: T) -> Self
-    {
-        Self::new(t)
-    }
-
-    fn lock(&self) -> LockResult<MutexGuard<T>>
-    {
-        Self::lock(self)
-    }
-}
-
-pub trait RwLock<T>
-    where T: Sized
-{
-    fn new(t: T) -> Self;
-
-    fn read(&self) -> LockResult<RwLockReadGuard<T>>;
-
-    fn write(&self) -> LockResult<RwLockWriteGuard<T>>;
-}
-
-impl<T> RwLock<T> for mioco::sync::RwLock<T>
-    where T: Sized
-{
-    fn new(t: T) -> Self
-    {
-        Self::new(t)
-    }
-
-    fn read(&self) -> LockResult<RwLockReadGuard<T>>
-    {
-        Self::read(self)
-    }
-
-    fn write(&self) -> LockResult<RwLockWriteGuard<T>>
-    {
-        Self::write(self)
-    }
-}
-
-impl<T> RwLock<T> for std::sync::RwLock<T>
-    where T: Sized
-{
-    fn new(t: T) -> Self
-    {
-        Self::new(t)
-    }
-
-    fn read(&self) -> LockResult<RwLockReadGuard<T>>
-    {
-        Self::read(self)
-    }
-
-    fn write(&self) -> LockResult<RwLockWriteGuard<T>>
-    {
-        Self::write(self)
-    }
-}
 
 pub trait Listen: Sized
 {
@@ -268,5 +156,29 @@ impl<T> Spawn<T> for Blocking
               F: Send + 'static,
     {
         std::thread::spawn(f)
+    }
+}
+
+pub trait JoinHandle<T>: Sized
+    where T: Send + 'static
+{
+    fn join(self: Self) -> thread::Result<T>;
+}
+
+impl<T> JoinHandle<T> for mioco::JoinHandle<T>
+      where T: Send + 'static
+{
+    fn join(self: Self) -> thread::Result<T>
+    {
+        Self::join(self)
+    }
+}
+
+impl<T> JoinHandle<T> for thread::JoinHandle<T>
+      where T: Send + 'static
+{
+    fn join(self: Self) -> thread::Result<T>
+    {
+        Self::join(self)
     }
 }

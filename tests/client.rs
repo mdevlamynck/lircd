@@ -12,21 +12,21 @@ mod functional
     use rand::{thread_rng, Rng};
     use std::str;
 
-    use lircd::{net, config, irc};
+    use lircd::{net, config};
 
     const TEST_LISTEN_ADDR: &'static str = "127.0.0.1";
 
     fn init_serv() -> (&'static str, u16)
     {
-        let port: u16      = thread_rng().gen_range(1024, 65535);
-        let mut config     = config::Config::new();
-        config.listen_addr = format!("{}:{}", TEST_LISTEN_ADDR, port);
+        let port: u16         = thread_rng().gen_range(6000, 6999);
+        let mut config        = config::Config::new();
+        config.listen_address = format!("{}:{}", TEST_LISTEN_ADDR, port);
 
         thread::spawn(move || {
-            net::run(config, irc::IrcProtocol::new());
+            net::run(config);
         });
 
-        thread::sleep(time::Duration::from_millis(100));
+        thread::sleep(time::Duration::from_millis(1000));
 
         (TEST_LISTEN_ADDR, port)
     }

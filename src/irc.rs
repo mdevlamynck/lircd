@@ -7,69 +7,71 @@ use errors::NetResult;
 use net::{StatefullProtocol, StatefullHandle};
 use reader::{MaxLengthedBufRead, MaxLengthedBufReader};
 
-pub struct IrcProtocol<O: 'static>
+pub struct IrcProtocol<Output>
+    where Output: Write + Send + 'static
 {
-    state: Arc<RwLock<Irc<O>>>,
+    state: Arc<RwLock<Irc<Output>>>,
 }
 
-impl<O> IrcProtocol<O>
+impl<Output> IrcProtocol<Output>
+    where Output: Write + Send + 'static
 {
-    pub fn new() -> Self
-    {
-        IrcProtocol::<O> {
-            state: Arc::new(RwLock::new(Irc::<O>::new())),
-        }
-    }
-
     pub fn clone(&self) -> Self
     {
-        IrcProtocol::<O> {
+        IrcProtocol::<Output> {
             state: self.state.clone(),
         }
     }
 
-    fn add_client(&self, client: Client<O>)
+    fn add_client(&self, client: Client<Output>)
     {
         let mut state = self.state.write().unwrap();
         state.users.push(client);
     }
 }
 
-pub struct IrcHandle<O: 'static>
+pub struct IrcHandle<Output>
+    where Output: Write + Send + 'static
 {
-    protocol: IrcProtocol<O>,
-    client:   Client<O>,
+    protocol: IrcProtocol<Output>,
+    client:   Client<Output>,
 }
 
-impl<O> IrcHandle<O>
-    where O: Write
+impl<Output> IrcHandle<Output>
+    where Output: Write + Send + 'static
 {
-    pub fn new(state_holder: &IrcProtocol<O>, client: Client<O>) -> IrcHandle<O>
+    pub fn new(state_holder: &IrcProtocol<Output>, client: Client<Output>) -> IrcHandle<Output>
     {
-        IrcHandle::<O> {
+        IrcHandle::<Output> {
             protocol: state_holder.clone(),
             client:   client
         }
     }
 }
 
-impl<O> StatefullProtocol for IrcProtocol<O>
-    where O: Write
+impl<Output> StatefullProtocol<Output> for IrcProtocol<Output>
+    where Output: Write + Send + 'static
 {
-    type O = O;
-    type H = IrcHandle<O>;
+    type Handle = IrcHandle<Output>;
 
-    fn new_connection(&self, output: Self::O) -> Self::H
+    fn new() -> Self
+    {
+        IrcProtocol::<Output> {
+            state: Arc::new(RwLock::new(Irc::<Output>::new())),
+        }
+    }
+
+    fn new_connection(&self, output: Output) -> Self::Handle
     {
         let client = Client::new(output);
         self.add_client(client.clone());
 
-        IrcHandle::<O>::new(self, client)
+        IrcHandle::<Output>::new(self, client)
     }
 }
 
-impl<O> StatefullHandle for IrcHandle<O>
-    where O: Write
+impl<Output> StatefullHandle<Output> for IrcHandle<Output>
+    where Output: Write + Send + 'static
 {
     fn consume<I: Read>(self, input: I) -> NetResult
     {
@@ -100,39 +102,39 @@ impl<O> StatefullHandle for IrcHandle<O>
 }
 
 #[derive(Debug)]
-pub struct Irc<O: 'static>
+pub struct Irc<Output: 'static>
 {
-    pub users: Vec<Client<O>>,
+    pub users: Vec<Client<Output>>,
 }
 
-impl<O> Irc<O>
+impl<Output> Irc<Output>
 {
     pub fn new() -> Self
     {
-        Irc::<O> {
+        Irc::<Output> {
             users: Vec::new()
         }
     }
 }
 
 #[derive(Debug)]
-pub struct Client<O: 'static>
+pub struct Client<Output: 'static>
 {
-    pub output: Arc<Mutex<O>>,
+    pub output: Arc<Mutex<Output>>,
 }
 
-impl<O> Client<O>
+impl<Output> Client<Output>
 {
-    pub fn new(output: O) -> Self
+    pub fn new(output: Output) -> Self
     {
-        Client::<O> {
+        Client::<Output> {
             output: Arc::new(Mutex::new(output)),
         }
     }
 
     pub fn clone(&self) -> Self
     {
-        Client::<O> {
+        Client::<Output> {
             output: self.output.clone(),
         }
     }

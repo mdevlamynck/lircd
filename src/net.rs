@@ -2,74 +2,84 @@ extern crate mioco;
 extern crate simple_signal;
 
 use std;
-use std::io::Read;
-use self::mioco::tcp::{TcpListener, TcpStream};
-use self::mioco::unix::{UnixListener, UnixStream};
+use std::io::{Read, Write};
 use self::simple_signal::{Signals, Signal};
+use irc::IrcProtocol;
 use config::Config;
 use errors::NetResult;
-use std::path::Path;
 use common_api::{Listen, Stream, Spawn, Async, Blocking};
 
-pub trait StatefullProtocol
+pub trait StatefullProtocol<Output>: Send + 'static
+    where Output: Write + Send
 {
-    type O;
-    type H: StatefullHandle;
+    type Handle: StatefullHandle<Output>;
 
-    fn new_connection(&self, output: Self::O) -> Self::H;
+    fn new() -> Self;
+
+    fn new_connection(&self, output: Output) -> Self::Handle;
 }
 
-pub trait StatefullHandle
+pub trait StatefullHandle<Output>: Send + 'static
+    where Output: Write + Send
 {
-    fn consume<I: Read>(self, input: I) -> NetResult;
+    fn consume<Input: Read>(self, input: Input) -> NetResult;
 
     fn handle_request(&self, request: String) -> NetResult;
 }
 
-pub fn run<P>(config: Config, protocol: P)
-    where P: StatefullProtocol<O = TcpStream> + Send + 'static,
-          P::H: Send + 'static
+pub fn run(config: Config)
 {
-    let (shutdown_tx, shutdown_rx) = mioco::sync::mpsc::channel();
+    if config.use_async {
+        let (shutdown_tx, shutdown_rx) = mioco::sync::mpsc::channel();
 
-    let join_handle = mioco::spawn(move || -> NetResult {
-        let _ = mioco::spawn(move || {
-            let _ = shutdown_rx.recv();
-            mioco::shutdown();
+        let join_handle = mioco::spawn(move || -> NetResult {
+            let _ = mioco::spawn(move || {
+                let _ = shutdown_rx.recv();
+                mioco::shutdown();
+            });
+
+            if config.is_unix {
+                try!(listen::<mioco::unix::UnixListener, Async>(config));
+            } else {
+                try!(listen::<mioco::tcp::TcpListener, Async>(config));
+            }
+
+            Ok(())
         });
 
-        if config.use_async {
-            try!(listen::<mioco::tcp::TcpListener, Async, P>(protocol, &config.listen_addr));
+        Signals::set_handler(&[Signal::Term, Signal::Int], move |signals| {
+            info!("Recieved signal {:?}, stopping...", signals);
+            shutdown_tx.send(()).unwrap();
+        });
+
+        match join_handle.join() {
+            Ok(inner_result) => {
+                match inner_result {
+                    Ok(_)    => info!("Terminated successfully"),
+                    Err(err) => error!("Error occured: {}", err),
+                };
+            },
+            Err(_) => info!("Stopped by signal"),
         }
+    } else {
+        Blocking::spawn(move || -> NetResult {
+            if config.is_unix {
+                try!(listen::<std::os::unix::net::UnixListener, Blocking>(config));
+            } else {
+                try!(listen::<std::net::TcpListener, Blocking>(config));
+            }
 
-        Ok(())
-    });
-
-    Signals::set_handler(&[Signal::Term, Signal::Int], move |signals| {
-        info!("Recieved signal {:?}, stopping...", signals);
-        shutdown_tx.send(()).unwrap();
-    });
-
-    let result = join_handle.join();
-
-    match result {
-        Ok(inner_result) => {
-            match inner_result {
-                Ok(_)    => info!("Terminated successfully"),
-                Err(err) => error!("Error occured: {}", err),
-            };
-        },
-        Err(_) => info!("Stopped by signal"),
+            Ok(())
+        });
     }
 }
 
-fn listen<L, S, P>(protocol: P, address: &str) -> NetResult
+fn listen<L, S>(config: Config) -> NetResult
     where L: Listen,
-          S: Spawn<NetResult>,
-          P: StatefullProtocol<O = L::Stream>,
-          P::H: Send + 'static
+          S: Spawn<NetResult>
 {
-    let listener = try!(L::bind(address));
+    let protocol = IrcProtocol::<L::Stream>::new();
+    let listener = try!(L::bind(&config.listen_address));
 
     loop {
         let input_socket  = try!(listener.accept());
@@ -88,76 +98,16 @@ fn listen<L, S, P>(protocol: P, address: &str) -> NetResult
 #[cfg(test)]
 mod test
 {
-    extern crate mioco;
-
-    use config::Config;
-    use errors::NetResult;
-    use std::error::Error;
-    use self::mioco::tcp::TcpStream;
-    use super::{StatefullProtocol, StatefullHandle};
-
-    struct DummyProtocol;
-    struct DummyHandle;
-
-    impl StatefullProtocol for DummyProtocol
-    {
-        type O = TcpStream;
-        type H = DummyHandle;
-
-        fn new_connection(&self, output: Self::O) -> Self::H
-        {
-            DummyHandle {}
-        }
-    }
-
-    impl StatefullHandle for DummyHandle
-    {
-        fn consume<I = TcpStream>(self, input: I) -> NetResult
-        {
-            Ok(())
-        }
-
-        fn handle_request(&self, request: String) -> NetResult
-        {
-            Ok(())
-        }
-    }
-
     #[test]
     fn raise_error_on_invalid_listen_address()
     {
-        let _ = mioco::start(|| {
-            let mut config = Config::default();
-            config.listen_addr = "definitely not a network address".to_string();
-
-            let result = mioco::spawn(move || -> NetResult {
-                
-                super::tcp_listener(config, DummyProtocol {})
-            }).join().ok().unwrap();
-
-            assert!(result.is_err());
-            assert_eq!("invalid IP address syntax", result.err().unwrap().description());
-
-            mioco::shutdown();
-        });
+        // TODO
     }
 
     #[test]
     fn raise_error_on_fail_to_bind_address()
     {
-        let _ = mioco::start(|| {
-            let mut config = Config::default();
-            config.listen_addr = "127.0.0.1:1".to_string();
-
-            let result = mioco::spawn(move || -> NetResult {
-                super::tcp_listener(config, DummyProtocol {})
-            }).join().ok().unwrap();
-
-            assert!(result.is_err());
-            assert_eq!("permission denied", result.err().unwrap().description());
-
-            mioco::shutdown();
-        });
+        // TODO
     }
 
     #[test]
