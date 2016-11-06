@@ -2,15 +2,14 @@ extern crate mioco;
 
 use std::str::FromStr;
 
-#[derive(Debug)]
 struct Message
 {
-    pub prefix:    String, // (optional) servername the message originates from
-    pub command:   IrcCommand,
+    pub prefix:    Option<String>, // servername the message originates from
+    pub command:   Command,
 }
 
-#[derive(Debug)]
-enum IrcCommand
+#[derive(Debug, PartialEq)]
+enum Command
 {
     // Init connection
     Pass   {password: String}, // Password
@@ -35,14 +34,14 @@ enum IrcCommand
     __NonExhaustive,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 struct JoinContent
 {
     chan: String,
     key:  Option<String>
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum ChannelMode
 {
     o,
@@ -60,7 +59,7 @@ enum ChannelMode
     __NonExhaustive,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum UserMode
 {
     i,
@@ -216,9 +215,11 @@ mod error
     const USER_DONT_MATCH      : &'static str = "502";
 }
 
+#[derive(Debug, PartialEq)]
 enum MessageParseError
 {
     NeedMoreParams,
+    UnknownCommand,
 }
 
 impl FromStr for Message
@@ -227,16 +228,121 @@ impl FromStr for Message
 
     fn from_str(s: &str) -> Result<Self, Self::Err>
     {
-        Ok(
-            Message {
-                prefix: "".to_string(),
-                command: IrcCommand::Unknown
-            }
-        )
+        let mut prefix    = None;
+        let mut command   = Command::Unknown;
+
+        let mut arguments = s.split_whitespace().map(|s| s.to_string());
+        let mut argument  = arguments.next().unwrap_or(String::new());
+
+        if argument.starts_with(':') {
+            argument.remove(0);
+            prefix   = Some(argument);
+            argument = arguments.next().unwrap_or(String::new());
+        }
+
+        if argument.is_empty() {
+            return Err(MessageParseError::UnknownCommand);
+        }
+
+        let parse_result = match argument.as_ref() {
+            "PASS" => parse_pass(arguments),
+            _      => Err(MessageParseError::UnknownCommand),
+        };
+
+        match parse_result {
+            Ok(command) => {
+                Ok(Message {
+                    prefix:  prefix,
+                    command: command,
+                })
+            },
+            Err(err) => Err(err)
+        }
     }
+}
+
+fn parse_pass<Iter>(mut arguments: Iter) -> Result<Command, MessageParseError>
+    where Iter: Iterator<Item=String>
+{
+    let password = match arguments.next() {
+        Some(arg) => arg,
+        None      => return Err(MessageParseError::NeedMoreParams),
+    };
+
+    Ok(Command::Pass{password: password})
 }
 
 #[cfg(test)]
 mod test
 {
+    use super::Message;
+    use super::Command;
+    use super::MessageParseError;
+
+    #[test]
+    fn parse_with_prefix()
+    {
+        let message = ":some_prefix PASS args".parse::<Message>();
+        assert!(message.is_ok());
+
+        let prefix = message.ok().unwrap().prefix;
+        assert!(prefix.is_some());
+        assert_eq!("some_prefix", &prefix.unwrap());
+    }
+
+    #[test]
+    fn parse_without_prefix()
+    {
+        let message = "PASS args".parse::<Message>();
+        assert!(message.is_ok());
+
+        let prefix = message.ok().unwrap().prefix;
+        assert!(prefix.is_none());
+    }
+
+    #[test]
+    fn parse_empty_line()
+    {
+        let message = "".parse::<Message>();
+
+        assert!(message.is_err());
+        assert_eq!(MessageParseError::UnknownCommand, message.err().unwrap());
+    }
+
+    #[test]
+    fn parse_prefix_then_empty_line()
+    {
+        let message = ":some_prefix".parse::<Message>();
+
+        assert!(message.is_err());
+        assert_eq!(MessageParseError::UnknownCommand, message.err().unwrap());
+    }
+
+    #[test]
+    fn parse_unknown_command()
+    {
+        let message = "something args".parse::<Message>();
+
+        assert!(message.is_err());
+        assert_eq!(MessageParseError::UnknownCommand, message.err().unwrap());
+    }
+
+    #[test]
+    fn parse_command_pass()
+    {
+        let message = "PASS args".parse::<Message>();
+        assert!(message.is_ok());
+
+        let command = message.ok().unwrap().command;
+        assert_eq!(Command::Pass{password: "args".to_string()}, command);
+    }
+
+    #[test]
+    fn parse_command_pass_missing_arg()
+    {
+        let message = "PASS".parse::<Message>();
+
+        assert!(message.is_err());
+        assert_eq!(MessageParseError::NeedMoreParams, message.err().unwrap());
+    }
 }
