@@ -6,7 +6,7 @@ use std::io::{Read, Write};
 use self::simple_signal::{Signals, Signal};
 use irc::IrcProtocol;
 use config::Config;
-use errors::NetResult;
+use error::NetResult;
 use common_api::{Listen, Stream, Spawn, Async, Blocking};
 
 pub trait StatefullProtocol<Output>: Send + 'static
@@ -14,7 +14,7 @@ pub trait StatefullProtocol<Output>: Send + 'static
 {
     type Handle: StatefullHandle<Output>;
 
-    fn new() -> Self;
+    fn new(config: Config) -> Self;
 
     fn new_connection(&self, output: Output) -> Self::Handle;
 }
@@ -23,8 +23,6 @@ pub trait StatefullHandle<Output>: Send + 'static
     where Output: Write + Send
 {
     fn consume<Input: Read>(self, input: Input) -> NetResult;
-
-    fn handle_request(&self, request: String) -> NetResult;
 }
 
 pub fn run(config: Config)
@@ -78,8 +76,8 @@ fn listen<L, S>(config: Config) -> NetResult
     where L: Listen,
           S: Spawn<NetResult>
 {
-    let protocol = IrcProtocol::<L::Stream>::new();
     let listener = try!(L::bind(&config.listen_address));
+    let protocol = IrcProtocol::<L::Stream>::new(config);
 
     loop {
         let input_socket  = try!(listener.accept());

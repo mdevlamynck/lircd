@@ -2,7 +2,7 @@ extern crate mioco;
 
 use std;
 use std::io::{Read, Write};
-use errors::Result;
+use error::Result;
 use std::thread;
 
 pub trait Listen: Sized

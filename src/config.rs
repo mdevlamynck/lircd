@@ -1,6 +1,6 @@
 use std::default::Default;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Config
 {
     pub listen_address: String,

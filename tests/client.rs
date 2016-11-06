@@ -5,7 +5,6 @@ extern crate rand;
 
 mod functional
 {
-    use std::io::{Write, BufRead, BufReader};
     use std::net::TcpStream;
     use std::thread;
     use std::time;
@@ -46,40 +45,5 @@ mod functional
         let _ = TcpStream::connect(server).unwrap();
         let _ = TcpStream::connect(server).unwrap();
         let _ = TcpStream::connect(server).unwrap();
-    }
-
-    #[test]
-    fn round_echo_server()
-    {
-        let server = init_serv();
-        let mut client1 = TcpStream::connect(server).unwrap();
-        let mut client2 = TcpStream::connect(server).unwrap();
-
-        let mut client1_reader = BufReader::new(client1.try_clone().unwrap());
-        let mut client2_reader = BufReader::new(client2.try_clone().unwrap());
-
-        let _ = client1.write(b"Hi!\n");
-        let _ = client1.flush();
-
-        let mut client1_buffer = String::new();
-        let mut client2_buffer = String::new();
-
-        let _ = client1_reader.read_line(&mut client1_buffer);
-        let _ = client2_reader.read_line(&mut client2_buffer);
-
-        assert_eq!("Hi!\n", &client1_buffer);
-        assert_eq!("Hi!\n", &client2_buffer);
-
-        let _ = client2.write(b"It works!\n");
-        let _ = client2.flush();
-
-        client1_buffer.clear();
-        client2_buffer.clear();
-
-        let _ = client1_reader.read_line(&mut client1_buffer);
-        let _ = client2_reader.read_line(&mut client2_buffer);
-
-        assert_eq!("It works!\n", &client1_buffer);
-        assert_eq!("It works!\n", &client2_buffer);
     }
 }
