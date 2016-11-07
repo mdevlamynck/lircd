@@ -5,69 +5,8 @@ use std::str::FromStr;
 struct Message
 {
     pub prefix:    Option<String>, // servername the message originates from
-    pub command:   Command,
-}
-
-#[derive(Debug, PartialEq)]
-enum Command
-{
-    // Init connection
-    Pass   {password: String}, // Password
-    Nick   {nickname: String, hopcount: Option<u32>},
-    User   {username: String, hostname: String, servername: String, realname: String},
-    Server {severname: String, hopcount: u32, info: String},
-
-    // Server managment
-    Oper   {user: String, password: String},
-
-    // Closing connection
-    Quit   {quit_message: Option<String>},
-    SQuit  {server: String, comment: String},
-
-    // Channel
-    Join   {channels: Vec<JoinContent>},
-    Part   {channels: Vec<String>},
-
-    //Mode   {channel: String, limit: Option, user: Option, ban_mask: Option},
-
-    Unknown,
-    __NonExhaustive,
-}
-
-#[derive(Debug, PartialEq)]
-struct JoinContent
-{
-    chan: String,
-    key:  Option<String>
-}
-
-#[derive(Debug, PartialEq)]
-enum ChannelMode
-{
-    o,
-    p,
-    s,
-    i,
-    t,
-    n,
-    m,
-    l,
-    b,
-    v,
-    k,
-
-    __NonExhaustive,
-}
-
-#[derive(Debug, PartialEq)]
-enum UserMode
-{
-    i,
-    s,
-    w,
-    o,
-
-    __NonExhaustive,
+    pub command:   String,         // command
+    pub arguments: Vec<String>,    // iterator over arguments
 }
 
 mod reply
@@ -220,6 +159,7 @@ enum MessageParseError
 {
     NeedMoreParams,
     UnknownCommand,
+    SyntaxError,
 }
 
 impl FromStr for Message
@@ -229,60 +169,97 @@ impl FromStr for Message
     fn from_str(s: &str) -> Result<Self, Self::Err>
     {
         let mut prefix    = None;
-        let mut command   = Command::Unknown;
 
-        let mut arguments = s.split_whitespace().map(|s| s.to_string());
-        let mut argument  = arguments.next().unwrap_or(String::new());
+        let mut words = s.split_whitespace().map(|s| s.to_string());
+        let mut word  = words.next().unwrap_or(String::new());
 
-        if argument.starts_with(':') {
-            argument.remove(0);
-            prefix   = Some(argument);
-            argument = arguments.next().unwrap_or(String::new());
+        if word.starts_with(':') {
+            word.remove(0);
+            prefix   = Some(word);
+            word = words.next().unwrap_or(String::new());
         }
 
-        if argument.is_empty() {
-            return Err(MessageParseError::UnknownCommand);
+        if word.is_empty() {
+            return Err(MessageParseError::SyntaxError);
         }
 
-        let parse_result = match argument.as_ref() {
-            "PASS" => parse_pass(arguments),
-            _      => Err(MessageParseError::UnknownCommand),
-        };
+        let arguments = words.fold_trailing();
 
-        match parse_result {
-            Ok(command) => {
-                Ok(Message {
-                    prefix:  prefix,
-                    command: command,
-                })
-            },
-            Err(err) => Err(err)
-        }
+        Ok(Message {
+            prefix:    prefix,
+            command:   word,
+            arguments: arguments,
+        })
     }
 }
 
-fn parse_pass<Iter>(mut arguments: Iter) -> Result<Command, MessageParseError>
+trait ArgumentsIterator<Iter>
     where Iter: Iterator<Item=String>
 {
-    let password = match arguments.next() {
-        Some(arg) => arg,
-        None      => return Err(MessageParseError::NeedMoreParams),
-    };
+    fn fold_trailing(self) -> Vec<String>;
+}
 
-    Ok(Command::Pass{password: password})
+impl<Iter> ArgumentsIterator<Iter> for Iter
+    where Iter: Iterator<Item=String>
+{
+    fn fold_trailing(self) -> Vec<String>
+    {
+        let mut result         = Vec::new();
+        let mut eat_remaining  = false;
+        let mut previous_value = String::new();
+
+        for value in self {
+            match (eat_remaining, value) {
+                (false,ref mut value) if value.starts_with(':') => {
+                    eat_remaining = true;
+                    value.remove(0);
+
+                    previous_value.push_str(&value)
+                },
+                (true, ref mut value) => {
+                    previous_value.push(' ');
+                    previous_value.push_str(&value)
+                }
+                (false, value) => result.push(value),
+            }
+        }
+
+        if !previous_value.is_empty() {
+            result.push(previous_value);
+        }
+
+        result
+    }
 }
 
 #[cfg(test)]
 mod test
 {
     use super::Message;
-    use super::Command;
     use super::MessageParseError;
+
+    #[test]
+    fn parse_empty_line()
+    {
+        let message = "".parse::<Message>();
+
+        assert!(message.is_err());
+        assert_eq!(MessageParseError::SyntaxError, message.err().unwrap());
+    }
+
+    #[test]
+    fn parse_prefix_then_empty_line()
+    {
+        let message = ":some_prefix".parse::<Message>();
+
+        assert!(message.is_err());
+        assert_eq!(MessageParseError::SyntaxError, message.err().unwrap());
+    }
 
     #[test]
     fn parse_with_prefix()
     {
-        let message = ":some_prefix PASS args".parse::<Message>();
+        let message = ":some_prefix some_command some arguments".parse::<Message>();
         assert!(message.is_ok());
 
         let prefix = message.ok().unwrap().prefix;
@@ -293,7 +270,7 @@ mod test
     #[test]
     fn parse_without_prefix()
     {
-        let message = "PASS args".parse::<Message>();
+        let message = "not_a_prefix some arguments".parse::<Message>();
         assert!(message.is_ok());
 
         let prefix = message.ok().unwrap().prefix;
@@ -301,48 +278,42 @@ mod test
     }
 
     #[test]
-    fn parse_empty_line()
+    fn parse_command()
     {
-        let message = "".parse::<Message>();
-
-        assert!(message.is_err());
-        assert_eq!(MessageParseError::UnknownCommand, message.err().unwrap());
-    }
-
-    #[test]
-    fn parse_prefix_then_empty_line()
-    {
-        let message = ":some_prefix".parse::<Message>();
-
-        assert!(message.is_err());
-        assert_eq!(MessageParseError::UnknownCommand, message.err().unwrap());
-    }
-
-    #[test]
-    fn parse_unknown_command()
-    {
-        let message = "something args".parse::<Message>();
-
-        assert!(message.is_err());
-        assert_eq!(MessageParseError::UnknownCommand, message.err().unwrap());
-    }
-
-    #[test]
-    fn parse_command_pass()
-    {
-        let message = "PASS args".parse::<Message>();
+        let message = "not_a_prefix some arguments".parse::<Message>();
         assert!(message.is_ok());
 
         let command = message.ok().unwrap().command;
-        assert_eq!(Command::Pass{password: "args".to_string()}, command);
+        assert_eq!("not_a_prefix", &command);
     }
 
     #[test]
-    fn parse_command_pass_missing_arg()
+    fn parse_arguments_fold_trailing_groups_after_colon()
     {
-        let message = "PASS".parse::<Message>();
+        let message = "some_command some argument :some trailing".parse::<Message>();
+        assert!(message.is_ok());
 
-        assert!(message.is_err());
-        assert_eq!(MessageParseError::NeedMoreParams, message.err().unwrap());
+        let arguments = message.ok().unwrap().arguments;
+        assert_eq!(vec!["some".to_string(), "argument".to_string(), "some trailing".to_string()], arguments);
+    }
+
+    #[test]
+    fn parse_arguments_fold_trailing_keeps_identical_if_no_colon()
+    {
+        let message = "some_command some argument no trailing".parse::<Message>();
+        assert!(message.is_ok());
+
+        let arguments = message.ok().unwrap().arguments;
+        assert_eq!(vec!["some".to_string(), "argument".to_string(), "no".to_string(), "trailing".to_string()], arguments);
+    }
+
+    #[test]
+    fn parse_arguments_fold_trailing_no_content()
+    {
+        let message = "some_command".parse::<Message>();
+        assert!(message.is_ok());
+
+        let arguments = message.ok().unwrap().arguments;
+        assert!(arguments.is_empty());
     }
 }
