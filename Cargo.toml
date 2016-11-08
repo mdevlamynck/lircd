@@ -6,6 +6,10 @@ authors = [ "Matthias Devlamynck <matthias.devlamynck@mailoo.org>" ]
 [lib]
 name = "lircd"
 
+[[bin]]
+name = "lircd"
+doc = false
+
 [dependencies]
 mioco = "*"
 env_logger = "*"
