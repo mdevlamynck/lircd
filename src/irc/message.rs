@@ -168,27 +168,25 @@ impl FromStr for Message
 
     fn from_str(s: &str) -> Result<Self, Self::Err>
     {
-        let mut prefix    = None;
+        let mut prefix = None;
 
-        let mut words = s.split_whitespace().map(|s| s.to_string());
-        let mut word  = words.next().unwrap_or(String::new());
+        let mut words  = s.split_whitespace().map(|s| s.to_string());
+        let mut word   = words.next().unwrap_or(String::new());
 
         if word.starts_with(':') {
             word.remove(0);
-            prefix   = Some(word);
-            word = words.next().unwrap_or(String::new());
+            prefix = Some(word);
+            word   = words.next().unwrap_or(String::new());
         }
 
         if word.is_empty() {
             return Err(MessageParseError::SyntaxError);
         }
 
-        let arguments = words.fold_trailing();
-
         Ok(Message {
             prefix:    prefix,
             command:   word,
-            arguments: arguments,
+            arguments: words.fold_trailing().collect(),
         })
     }
 }
@@ -196,39 +194,43 @@ impl FromStr for Message
 trait ArgumentsIterator<Iter>
     where Iter: Iterator<Item=String>
 {
-    fn fold_trailing(self) -> Vec<String>;
+    fn fold_trailing(self) -> FoldTrailing<Iter>;
 }
 
 impl<Iter> ArgumentsIterator<Iter> for Iter
     where Iter: Iterator<Item=String>
 {
-    fn fold_trailing(self) -> Vec<String>
+    fn fold_trailing(self) -> FoldTrailing<Iter>
     {
-        let mut result         = Vec::new();
-        let mut eat_remaining  = false;
-        let mut previous_value = String::new();
+        FoldTrailing { iter: self }
+    }
+}
 
-        for value in self {
-            match (eat_remaining, value) {
-                (false,ref mut value) if value.starts_with(':') => {
-                    eat_remaining = true;
+pub struct FoldTrailing<Iter>
+    where Iter: Iterator<Item=String>
+{
+    iter: Iter,
+}
+
+impl<Iter> Iterator for FoldTrailing<Iter>
+    where Iter: Iterator<Item=String>
+{
+    type Item = String;
+
+    fn next(&mut self) -> Option<Self::Item>
+    {
+        match self.iter.next() {
+            Some(mut value) => {
+                if value.starts_with(':') {
                     value.remove(0);
-
-                    previous_value.push_str(&value)
-                },
-                (true, ref mut value) => {
-                    previous_value.push(' ');
-                    previous_value.push_str(&value)
+                    for next in self.iter.by_ref() {
+                        value.push_str(&next);
+                    }
                 }
-                (false, value) => result.push(value),
+                Some(value)
             }
+            None => None,
         }
-
-        if !previous_value.is_empty() {
-            result.push(previous_value);
-        }
-
-        result
     }
 }
 
