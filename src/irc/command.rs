@@ -1,30 +1,32 @@
 
-use irc::message::Message;
+use irc::message::{Message, MessageParseError};
 use irc::IrcHandle;
 use error::NetResult;
 use config::Config;
 use std::io::Write;
 
-pub fn dispatch_command<Output>(handle: &IrcHandle<Output>, message: String) -> NetResult
-    where Output: Write + Send + 'static
+pub fn dispatch_command<Output>(handle: &IrcHandle<Output>, request: String) -> NetResult
+    where Output: Write
 {
-    let parsed_message: Message = message.parse().unwrap();
+    let parse_result = request.parse::<Message>();
 
-    match parsed_message.command.as_ref() {
-        "PASS" => pass(handle, parsed_message),
-        _      => unknown_command(handle, parsed_message),
+    match parse_result {
+        Ok(message) => match message.command.as_ref() {
+            "PASS"  => pass(handle, message),
+            _       => unknown_command(handle, message),
+        },
+        _           => Ok(()),
     }
 }
 
 fn pass<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
-    where Output: Write + Send + 'static
+    where Output: Write
 {
     Ok(())
 }
 
-
 fn unknown_command<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
-    where Output: Write + Send + 'static
+    where Output: Write
 {
     Ok(())
 }
@@ -50,7 +52,7 @@ mod test
         let config     = Config::default();
 
         let mut state  = Arc::new(RwLock::new(Irc::new(config)));
-        let mut handle = IrcHandle::new(&state, &mut buffer);
+        let mut handle = IrcHandle::new(state.clone(), &mut buffer);
 
         let message    = "".to_string();
 

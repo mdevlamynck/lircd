@@ -224,6 +224,7 @@ impl<Iter> Iterator for FoldTrailing<Iter>
                 if value.starts_with(':') {
                     value.remove(0);
                     for next in self.iter.by_ref() {
+                        value.push(' ');
                         value.push_str(&next);
                     }
                 }

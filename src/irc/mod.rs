@@ -15,13 +15,13 @@ mod command;
 type IrcState<Output> = Arc<RwLock<Irc<Output>>>;
 
 pub struct IrcProtocol<Output>
-    where Output: Write + Send + 'static
+    where Output: Write
 {
     state: IrcState<Output>,
 }
 
 impl<Output> StatefullProtocol<Output> for IrcProtocol<Output>
-    where Output: Write + Send + 'static
+    where Output: Write
 {
     type Handle = IrcHandle<Output>;
 
@@ -34,19 +34,19 @@ impl<Output> StatefullProtocol<Output> for IrcProtocol<Output>
 
     fn new_connection(&self, output: Output) -> Self::Handle
     {
-        IrcHandle::<Output>::new(&self.state, output)
+        IrcHandle::<Output>::new(self.state.clone(), output)
     }
 }
 
 pub struct IrcHandle<Output>
-    where Output: Write + Send + 'static
+    where Output: Write
 {
     state:      IrcState<Output>,
-    connection: Connection<Output>,
+    connection: Mutex<Connection<Output>>,
 }
 
 impl<Output> StatefullHandle<Output> for IrcHandle<Output>
-    where Output: Write + Send + 'static
+    where Output: Write
 {
     fn consume<Input: Read>(self, input: Input) -> NetResult
     {
@@ -63,23 +63,22 @@ impl<Output> StatefullHandle<Output> for IrcHandle<Output>
 }
 
 impl<Output> IrcHandle<Output>
-    where Output: Write + Send + 'static
+    where Output: Write
 {
-    pub fn new(state_holder: &IrcState<Output>, connection: Output) -> IrcHandle<Output>
+    pub fn new(state_holder: IrcState<Output>, connection: Output) -> IrcHandle<Output>
     {
         IrcHandle::<Output> {
-            state:      state_holder.clone(),
-            connection: Connection::Unknown(connection),
+            state:      state_holder,
+            connection: Mutex::new(Connection::Unknown(connection)),
         }
     }
 }
 
-#[derive(Debug)]
-pub struct Irc<Output: 'static>
+pub struct Irc<Output>
 {
-    pub config:   Config,
-    pub users:    HashMap<String, Client<Output>>,
-    pub channels: HashMap<String, Client<Output>>,
+    pub config:   RwLock<Config>,
+    pub users:    RwLock<HashMap<String, Client<Output>>>,
+    pub channels: RwLock<HashMap<String, Client<Output>>>,
 }
 
 impl<Output> Irc<Output>
@@ -87,32 +86,29 @@ impl<Output> Irc<Output>
     pub fn new(config: Config) -> Self
     {
         Irc::<Output> {
-            config:   config,
-            users:    HashMap::new(),
-            channels: HashMap::new(),
+            config:   RwLock::new(config),
+            users:    RwLock::new(HashMap::new()),
+            channels: RwLock::new(HashMap::new()),
         }
     }
 }
 
-#[derive(Debug)]
 pub enum Connection<Output>
-    where Output: Write + Send + 'static
+    where Output: Write
 {
     Client(Client<Output>),
     Server(Server<Output>),
     Unknown(Output),
 }
 
-#[derive(Debug)]
-pub struct Server<Output: 'static>
+pub struct Server<Output>
 {
     pub output: Arc<Mutex<Output>>,
 
     pub name:   String,
 }
 
-#[derive(Debug)]
-pub struct Client<Output: 'static>
+pub struct Client<Output>
 {
     pub output:      Arc<Mutex<Output>>,
 
@@ -125,8 +121,7 @@ pub struct Client<Output: 'static>
     //pub channels:    Vec<Channel<Output>>,
 }
 
-#[derive(Debug)]
-pub struct Channel<Output: 'static>
+pub struct Channel<Output>
 {
     pub name:     String,
 

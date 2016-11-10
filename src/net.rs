@@ -9,8 +9,8 @@ use config::Config;
 use error::NetResult;
 use common_api::{Listen, Stream, Spawn, Async, Blocking};
 
-pub trait StatefullProtocol<Output>: Send + 'static
-    where Output: Write + Send
+pub trait StatefullProtocol<Output>
+    where Output: Write
 {
     type Handle: StatefullHandle<Output>;
 
@@ -19,8 +19,8 @@ pub trait StatefullProtocol<Output>: Send + 'static
     fn new_connection(&self, output: Output) -> Self::Handle;
 }
 
-pub trait StatefullHandle<Output>: Send + 'static
-    where Output: Write + Send
+pub trait StatefullHandle<Output>
+    where Output: Write
 {
     fn consume<Input: Read>(self, input: Input) -> NetResult;
 }
