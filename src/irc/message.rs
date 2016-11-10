@@ -2,7 +2,7 @@ extern crate mioco;
 
 use std::str::FromStr;
 
-struct Message
+pub struct Message
 {
     pub prefix:    Option<String>, // servername the message originates from
     pub command:   String,         // command
@@ -155,7 +155,7 @@ mod error
 }
 
 #[derive(Debug, PartialEq)]
-enum MessageParseError
+pub enum MessageParseError
 {
     NeedMoreParams,
     UnknownCommand,

@@ -10,6 +10,7 @@ use reader::{MaxLengthedBufRead, MaxLengthedBufReader};
 use config::Config;
 
 mod message;
+mod command;
 
 type IrcState<Output> = Arc<RwLock<Irc<Output>>>;
 
@@ -54,7 +55,7 @@ impl<Output> StatefullHandle<Output> for IrcHandle<Output>
         for line in input_reader.lines_without_too_long() {
             let request = line.unwrap();
 
-            try!(self.handle_request(request));
+            try!(command::dispatch_command(&self, request));
         }
 
         Ok(())
@@ -70,11 +71,6 @@ impl<Output> IrcHandle<Output>
             state:      state_holder.clone(),
             connection: Connection::Unknown(connection),
         }
-    }
-
-    fn handle_request(&self, request: String) -> NetResult
-    {
-        Ok(())
     }
 }
 
