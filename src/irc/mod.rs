@@ -1,6 +1,6 @@
 extern crate mioco;
 
-use std::io::{Read, Write};
+use std::io::{self, Read, Write};
 use std::sync::Arc;
 use std::collections::HashMap;
 use error::NetResult;
@@ -99,6 +99,28 @@ pub enum Connection<Output>
     Client(Client<Output>),
     Server(Server<Output>),
     Unknown(Output),
+}
+
+impl<Output> Write for Connection<Output>
+    where Output: Write
+{
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize>
+    {
+        match *self {
+            Connection::Client(ref mut client)  => unimplemented!(),
+            Connection::Server(ref mut server)  => unimplemented!(),
+            Connection::Unknown(ref mut output) => output.write(buf),
+        }
+    }
+
+    fn flush(&mut self) -> io::Result<()>
+    {
+        match *self {
+            Connection::Client(ref mut client)  => unimplemented!(),
+            Connection::Server(ref mut server)  => unimplemented!(),
+            Connection::Unknown(ref mut output) => output.flush(),
+        }
+    }
 }
 
 pub struct Server<Output>
