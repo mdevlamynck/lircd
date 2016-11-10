@@ -55,7 +55,7 @@ impl<Output> StatefullHandle<Output> for IrcHandle<Output>
         for line in input_reader.lines_without_too_long() {
             let request = line.unwrap();
 
-            try!(command::dispatch_command(&self, request));
+            command::dispatch_command(&self, request)?;
         }
 
         Ok(())

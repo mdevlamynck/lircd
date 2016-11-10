@@ -27,8 +27,7 @@ fn unknown_command<Output>(handle: &IrcHandle<Output>, message: Message) -> NetR
 {
     let mut connection = handle.connection.lock().unwrap();
 
-    connection.write(format!("{} {} :Unknown command\n", err::UNKNOWN_COMMAND, message.command).as_bytes());
-    connection.flush();
+    connection.write_all(format!("{} {} :Unknown command\n", err::UNKNOWN_COMMAND, message.command).as_bytes())?;
 
     Ok(())
 }
@@ -55,7 +54,7 @@ mod test
     use super::dispatch_command;
 
     #[test]
-    fn unknown_command()
+    fn unknown_command_writes_back_unknown_command()
     {
         let mut buffer = Vec::<u8>::new();
         let config     = Config::default();
@@ -74,7 +73,7 @@ mod test
     }
 
     #[test]
-    fn no_command()
+    fn no_command_no_reaction()
     {
         let mut buffer = Vec::<u8>::new();
         let config     = Config::default();

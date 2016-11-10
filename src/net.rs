@@ -37,9 +37,9 @@ pub fn run(config: Config)
             });
 
             if config.is_unix {
-                try!(listen::<mioco::unix::UnixListener, Async>(config));
+                listen::<mioco::unix::UnixListener, Async>(config)?;
             } else {
-                try!(listen::<mioco::tcp::TcpListener, Async>(config));
+                listen::<mioco::tcp::TcpListener, Async>(config)?;
             }
 
             Ok(())
@@ -62,9 +62,9 @@ pub fn run(config: Config)
     } else {
         Blocking::spawn(move || -> NetResult {
             if config.is_unix {
-                try!(listen::<std::os::unix::net::UnixListener, Blocking>(config));
+                listen::<std::os::unix::net::UnixListener, Blocking>(config)?;
             } else {
-                try!(listen::<std::net::TcpListener, Blocking>(config));
+                listen::<std::net::TcpListener, Blocking>(config)?;
             }
 
             Ok(())
@@ -76,17 +76,17 @@ fn listen<L, S>(config: Config) -> NetResult
     where L: Listen,
           S: Spawn<NetResult>
 {
-    let listener = try!(L::bind(&config.listen_address));
+    let listener = L::bind(&config.listen_address)?;
     let protocol = IrcProtocol::<L::Stream>::new(config);
 
     loop {
-        let input_socket  = try!(listener.accept());
-        let output_socket = try!(input_socket.try_clone());
+        let input_socket  = listener.accept()?;
+        let output_socket = input_socket.try_clone()?;
 
         let handle        = protocol.new_connection(output_socket);
 
         S::spawn(move || -> NetResult {
-            try!(handle.consume(input_socket));
+            handle.consume(input_socket)?;
 
             Ok(())
         });

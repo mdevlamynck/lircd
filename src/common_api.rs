@@ -25,15 +25,15 @@ impl Listen for mioco::tcp::TcpListener
 
     fn bind(address: &str) -> Result<Self>
     {
-        let tcp_listen_address = try!(address.parse());
-        let tcp_listener = try!(Self::bind(&tcp_listen_address));
+        let tcp_listen_address = address.parse()?;
+        let tcp_listener       = Self::bind(&tcp_listen_address)?;
 
         Ok(tcp_listener)
     }
 
     fn accept(&self) -> Result<Self::Stream>
     {
-        Ok(try!(Self::accept(self)))
+        Ok(Self::accept(self)?)
     }
 }
 
@@ -41,7 +41,7 @@ impl Stream for mioco::tcp::TcpStream
 {
     fn try_clone(&self) -> Result<Self>
     {
-        Ok(try!(Self::try_clone(self)))
+        Ok(Self::try_clone(self)?)
     }
 }
 
@@ -51,14 +51,14 @@ impl Listen for std::net::TcpListener
 
     fn bind(address: &str) -> Result<Self>
     {
-        let tcp_listener = try!(Self::bind(&address));
+        let tcp_listener = Self::bind(&address)?;
 
         Ok(tcp_listener)
     }
 
     fn accept(&self) -> Result<Self::Stream>
     {
-        let (stream, _) = try!(Self::accept(self));
+        let (stream, _) = Self::accept(self)?;
 
         Ok(stream)
     }
@@ -68,7 +68,7 @@ impl Stream for std::net::TcpStream
 {
     fn try_clone(&self) -> Result<Self>
     {
-        Ok(try!(Self::try_clone(self)))
+        Ok(Self::try_clone(self)?)
     }
 }
 
@@ -78,12 +78,12 @@ impl Listen for mioco::unix::UnixListener
 
     fn bind(address: &str) -> Result<Self>
     {
-        Ok(try!(Self::bind(address)))
+        Ok(Self::bind(address)?)
     }
 
     fn accept(&self) -> Result<Self::Stream>
     {
-        Ok(try!(Self::accept(self)))
+        Ok(Self::accept(self)?)
     }
 }
 
@@ -91,7 +91,7 @@ impl Stream for mioco::unix::UnixStream
 {
     fn try_clone(&self) -> Result<Self>
     {
-        Ok(try!(Self::try_clone(self)))
+        Ok(Self::try_clone(self)?)
     }
 }
 
@@ -101,12 +101,12 @@ impl Listen for std::os::unix::net::UnixListener
 
     fn bind(address: &str) -> Result<Self>
     {
-        Ok(try!(Self::bind(address)))
+        Ok(Self::bind(address)?)
     }
 
     fn accept(&self) -> Result<Self::Stream>
     {
-        let (stream, _) = try!(Self::accept(self));
+        let (stream, _) = Self::accept(self)?;
 
         Ok(stream)
     }
@@ -116,7 +116,7 @@ impl Stream for std::os::unix::net::UnixStream
 {
     fn try_clone(&self) -> Result<Self>
     {
-        Ok(try!(Self::try_clone(self)))
+        Ok(Self::try_clone(self)?)
     }
 }
 
