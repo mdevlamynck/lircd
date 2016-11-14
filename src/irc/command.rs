@@ -1,5 +1,5 @@
 use irc::message::{Message, MessageParseError, reply, error as err};
-use irc::{IrcHandle, Connection};
+use irc::{IrcHandle, Connection, Client};
 use error::NetResult;
 use config::Config;
 use std::io::Write;
@@ -76,7 +76,23 @@ fn pass<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
 fn nick<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
     where Output: Write
 {
-    unimplemented_command(handle, message)
+    let mut connection = handle.connection.lock().unwrap();
+
+    let ref arguments = message.arguments;
+
+    if arguments.len() >= 1 {
+        let ref new_nickname = arguments[0];
+
+        if let Connection::Unknown(_) = *connection {
+            *connection = Connection::Client(Client::new(handle.output.clone()));
+        }
+
+        if let Connection::Client(ref mut client) = *connection {
+            client.nickname = new_nickname.clone();
+        }
+    }
+
+    Ok(())
 }
 
 fn user<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult

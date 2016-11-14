@@ -43,6 +43,7 @@ pub struct IrcHandle<Output>
 {
     state:      IrcState<Output>,
     connection: Mutex<Connection<Output>>,
+    output:     Arc<Mutex<Output>>,
 }
 
 impl<Output> StatefullHandle<Output> for IrcHandle<Output>
@@ -67,9 +68,12 @@ impl<Output> IrcHandle<Output>
 {
     pub fn new(state_holder: IrcState<Output>, connection: Output) -> IrcHandle<Output>
     {
+        let output = Arc::new(Mutex::new(connection));
+
         IrcHandle::<Output> {
             state:      state_holder,
-            connection: Mutex::new(Connection::Unknown(connection)),
+            connection: Mutex::new(Connection::Unknown(output.clone())),
+            output:     output,
         }
     }
 }
@@ -98,7 +102,7 @@ pub enum Connection<Output>
 {
     Client(Client<Output>),
     Server(Server<Output>),
-    Unknown(Output),
+    Unknown(Arc<Mutex<Output>>),
 }
 
 impl<Output> Write for Connection<Output>
@@ -109,7 +113,7 @@ impl<Output> Write for Connection<Output>
         match *self {
             Connection::Client(ref mut client)  => unimplemented!(),
             Connection::Server(ref mut server)  => unimplemented!(),
-            Connection::Unknown(ref mut output) => output.write(buf),
+            Connection::Unknown(ref mut output) => output.lock().unwrap().write(buf),
         }
     }
 
@@ -118,7 +122,7 @@ impl<Output> Write for Connection<Output>
         match *self {
             Connection::Client(ref mut client)  => unimplemented!(),
             Connection::Server(ref mut server)  => unimplemented!(),
-            Connection::Unknown(ref mut output) => output.flush(),
+            Connection::Unknown(ref mut output) => output.lock().unwrap().flush(),
         }
     }
 }
@@ -134,7 +138,7 @@ pub struct Client<Output>
 {
     pub output:      Arc<Mutex<Output>>,
 
-    //pub nickname:    String, // user nickname
+    pub nickname:    String, // user nickname
     //pub hostname:    String, // name of client's host
     //pub username:    String, // name of the user on that host
     //pub server:      String, // server the client is connected to
@@ -153,17 +157,11 @@ pub struct Channel<Output>
 
 impl<Output> Client<Output>
 {
-    pub fn new(output: Output) -> Self
+    pub fn new(output: Arc<Mutex<Output>>) -> Self
     {
         Client::<Output> {
-            output: Arc::new(Mutex::new(output)),
-        }
-    }
-
-    pub fn clone(&self) -> Self
-    {
-        Client::<Output> {
-            output: self.output.clone(),
+            output:   output,
+            nickname: String::new(),
         }
     }
 }
