@@ -1,38 +1,43 @@
 extern crate mioco;
 
 use std::{net, io, result, error, fmt};
+use std::error::Error;
 
 #[derive(Debug)]
 pub enum NetError
 {
     Io(io::Error),
     Parse(net::AddrParseError),
+    CloseConnection,
 }
 
 impl fmt::Display for NetError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            NetError::Io(ref err)    => write!(f, "IO error: {}", err),
-            NetError::Parse(ref err) => write!(f, "Parse error: {}", err),
+            NetError::Io(ref err)     => write!(f, "IO error: {}", err),
+            NetError::Parse(ref err)  => write!(f, "Parse error: {}", err),
+            NetError::CloseConnection => write!(f, "{}", self.description()),
         }
     }
 }
 
-impl error::Error for NetError
+impl Error for NetError
 {
     fn description(&self) -> &str
     {
         match *self {
-            NetError::Io(ref err)    => err.description(),
-            NetError::Parse(ref err) => err.description(),
+            NetError::Io(ref err)     => err.description(),
+            NetError::Parse(ref err)  => err.description(),
+            NetError::CloseConnection => "Close connection",
         }
     }
 
-    fn cause(&self) -> Option<&error::Error>
+    fn cause(&self) -> Option<&Error>
     {
         match *self {
-            NetError::Io(ref err)    => Some(err),
-            NetError::Parse(ref err) => Some(err),
+            NetError::Io(ref err)     => Some(err),
+            NetError::Parse(ref err)  => Some(err),
+            NetError::CloseConnection => None,
         }
     }
 }

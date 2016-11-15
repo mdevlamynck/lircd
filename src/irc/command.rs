@@ -1,6 +1,6 @@
-use irc::message::{Message, MessageParseError, reply, error as err};
+use irc::message::{Message, reply, error as err};
 use irc::{IrcHandle, Connection, Client};
-use error::NetResult;
+use error::{NetResult, NetError};
 use config::Config;
 use std::io::Write;
 
@@ -9,58 +9,58 @@ pub fn dispatch_command<Output>(handle: &IrcHandle<Output>, request: String) -> 
 {
     match request.parse::<Message>() {
         Ok(message)    => match message.command.as_ref() {
-            "PASS"     => pass(handle, message),
-            "NICK"     => nick(handle, message),
-            "USER"     => user(handle, message),
-            "OPER"     => oper(handle, message),
-            "MODE"     => mode(handle, message),
-            "SERVICE"  => service(handle, message),
-            "QUIT"     => quit(handle, message),
-            "SQUIT"    => squit(handle, message),
-            "JOIN"     => join(handle, message),
-            "PART"     => part(handle, message),
-            "TOPIC"    => topic(handle, message),
-            "NAMES"    => names(handle, message),
-            "LIST"     => list(handle, message),
-            "INVITE"   => invite(handle, message),
-            "KICK"     => kick(handle, message),
-            "PRIVMSG"  => privmsg(handle, message),
-            "NOTICE"   => notice(handle, message),
-            "MOTD"     => motd(handle, message),
-            "LUSERS"   => lusers(handle, message),
-            "VERSION"  => version(handle, message),
-            "STATS"    => stats(handle, message),
-            "LINKS"    => links(handle, message),
-            "TIME"     => time(handle, message),
-            "CONNECT"  => connect(handle, message),
-            "TRACE"    => trace(handle, message),
-            "ADMIN"    => admin(handle, message),
-            "INFO"     => info(handle, message),
-            "SERVLIST" => servlist(handle, message),
-            "SQUERY"   => squery(handle, message),
-            "WHO"      => who(handle, message),
-            "WHOIS"    => whois(handle, message),
-            "WHOWAS"   => whowas(handle, message),
-            "KILL"     => kill(handle, message),
-            "PING"     => ping(handle, message),
-            "PONG"     => pong(handle, message),
-            "ERROR"    => error(handle, message),
-            "AWAY"     => away(handle, message),
-            "REHASH"   => rehash(handle, message),
-            "DIE"      => die(handle, message),
-            "RESTART"  => restart(handle, message),
-            "SUMMON"   => summon(handle, message),
-            "USERS"    => users(handle, message),
-            "WALLOPS"  => wallops(handle, message),
-            "USERHOST" => userhost(handle, message),
-            "ISON"     => ison(handle, message),
-            _          => unknown_command(handle, message),
+            "PASS"     => pass(handle, &message),
+            "NICK"     => nick(handle, &message),
+            "USER"     => user(handle, &message),
+            "OPER"     => oper(handle, &message),
+            "MODE"     => mode(handle, &message),
+            "SERVICE"  => service(handle, &message),
+            "QUIT"     => quit(handle, &message),
+            "SQUIT"    => squit(handle, &message),
+            "JOIN"     => join(handle, &message),
+            "PART"     => part(handle, &message),
+            "TOPIC"    => topic(handle, &message),
+            "NAMES"    => names(handle, &message),
+            "LIST"     => list(handle, &message),
+            "INVITE"   => invite(handle, &message),
+            "KICK"     => kick(handle, &message),
+            "PRIVMSG"  => privmsg(handle, &message),
+            "NOTICE"   => notice(handle, &message),
+            "MOTD"     => motd(handle, &message),
+            "LUSERS"   => lusers(handle, &message),
+            "VERSION"  => version(handle, &message),
+            "STATS"    => stats(handle, &message),
+            "LINKS"    => links(handle, &message),
+            "TIME"     => time(handle, &message),
+            "CONNECT"  => connect(handle, &message),
+            "TRACE"    => trace(handle, &message),
+            "ADMIN"    => admin(handle, &message),
+            "INFO"     => info(handle, &message),
+            "SERVLIST" => servlist(handle, &message),
+            "SQUERY"   => squery(handle, &message),
+            "WHO"      => who(handle, &message),
+            "WHOIS"    => whois(handle, &message),
+            "WHOWAS"   => whowas(handle, &message),
+            "KILL"     => kill(handle, &message),
+            "PING"     => ping(handle, &message),
+            "PONG"     => pong(handle, &message),
+            "ERROR"    => error(handle, &message),
+            "AWAY"     => away(handle, &message),
+            "REHASH"   => rehash(handle, &message),
+            "DIE"      => die(handle, &message),
+            "RESTART"  => restart(handle, &message),
+            "SUMMON"   => summon(handle, &message),
+            "USERS"    => users(handle, &message),
+            "WALLOPS"  => wallops(handle, &message),
+            "USERHOST" => userhost(handle, &message),
+            "ISON"     => ison(handle, &message),
+            _          => unknown_command(handle, &message),
         },
         _              => no_command(handle),
     }
 }
 
-fn pass<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn pass<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     let mut connection = handle.connection.lock().unwrap();
@@ -73,16 +73,15 @@ fn pass<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
     Ok(())
 }
 
-fn nick<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn nick<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
-    let mut connection = handle.connection.lock().unwrap();
-
     let ref arguments = message.arguments;
 
     if arguments.len() >= 1 {
         let ref new_nickname = arguments[0];
 
+        let mut connection   = handle.connection.lock().unwrap();
         if let Connection::Unknown(_) = *connection {
             *connection = Connection::Client(Client::new(handle.output.clone()));
         }
@@ -90,24 +89,42 @@ fn nick<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
         if let Connection::Client(ref mut client) = *connection {
             client.nickname = new_nickname.clone();
         }
+    } else {
+        need_more_params(handle, message);
     }
 
     Ok(())
 }
 
-fn user<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn user<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
+    where Output: Write
+{
+    let ref arguments = message.arguments;
+
+    if arguments.len() >= 4 {
+        let ref username   = arguments[0];
+        let ref mode       = arguments[1];
+        let ref realname   = arguments[3];
+
+        let mut connection = handle.connection.lock().unwrap();
+        if let Connection::Client(ref mut client) = *connection {
+            client.username = username.clone();
+            client.realname = realname.clone();
+        }
+    } else {
+        need_more_params(handle, message);
+    }
+
+    Ok(())
+}
+
+fn oper<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn oper<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
-    where Output: Write
-{
-    unimplemented_command(handle, message)
-}
-
-fn mode<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn mode<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     if message.command.starts_with('#') {
@@ -117,274 +134,277 @@ fn mode<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
     }
 }
 
-fn mode_user<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn mode_user<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn mode_channel<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn mode_channel<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn service<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn service<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn quit<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn quit<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
+    where Output: Write
+{
+    let mut connection = handle.connection.lock().unwrap();
+    connection.write_all("ERROR\r\n".as_bytes())?;
+
+    Err(NetError::CloseConnection)
+}
+
+fn squit<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn squit<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn join<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn join<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn part<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn part<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn topic<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn topic<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn names<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn names<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn list<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn list<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn invite<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn invite<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn kick<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn kick<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn privmsg<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn privmsg<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn notice<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn notice<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn motd<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn motd<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn lusers<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn lusers<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn version<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn version<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn stats<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn stats<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn links<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn links<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn time<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn time<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn connect<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn connect<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn trace<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn trace<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn admin<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn admin<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn info<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn info<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn servlist<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn servlist<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn squery<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn squery<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn who<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn who<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn whois<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn whois<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn whowas<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn whowas<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn kill<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn kill<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn ping<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn ping<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn pong<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn pong<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn error<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn error<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn away<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn away<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn rehash<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn rehash<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn die<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn die<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn restart<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn restart<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn summon<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn summon<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn users<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn users<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn wallops<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn wallops<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn userhost<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn userhost<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn ison<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
 }
 
-fn ison<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
-    where Output: Write
-{
-    unimplemented_command(handle, message)
-}
-
-fn unimplemented_command<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn unimplemented_command<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     let mut connection = handle.connection.lock().unwrap();
 
-    connection.write_all(format!("{r} {c} :Unknown command, not implemented yet\r\n", r=err::UNKNOWN_COMMAND, c=message.command).as_bytes())?;
+    connection.write_all(format!("{e} {c} :Unknown command, not implemented yet\r\n", e=err::UNKNOWN_COMMAND, c=message.command).as_bytes())?;
 
     Ok(())
 }
 
-fn unknown_command<Output>(handle: &IrcHandle<Output>, message: Message) -> NetResult
+fn unknown_command<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     let mut connection = handle.connection.lock().unwrap();
 
-    connection.write_all(format!("{r} {c} :Unknown command\r\n", r=err::UNKNOWN_COMMAND, c=message.command).as_bytes())?;
+    connection.write_all(format!("{e} {c} :Unknown command\r\n", e=err::UNKNOWN_COMMAND, c=message.command).as_bytes())?;
 
     Ok(())
 }
@@ -392,6 +412,16 @@ fn unknown_command<Output>(handle: &IrcHandle<Output>, message: Message) -> NetR
 fn no_command<Output>(handle: &IrcHandle<Output>) -> NetResult
     where Output: Write
 {
+    Ok(())
+}
+
+fn need_more_params<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
+    where Output: Write
+{
+    let mut connection = handle.connection.lock().unwrap();
+
+    connection.write_all(format!("{e} {c} :Not enough parameters\r\n", e=err::NEED_MORE_PARAMS, c=message.command).as_bytes())?;
+
     Ok(())
 }
 

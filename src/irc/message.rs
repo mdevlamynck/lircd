@@ -9,6 +9,7 @@ pub struct Message
     pub arguments: Vec<String>,    // iterator over arguments
 }
 
+#[allow(dead_code)]
 pub mod reply
 {
     pub const WELCOME            : &'static str = "001";
@@ -97,6 +98,7 @@ pub mod reply
     pub const TRY_AGAIN          : &'static str = "263";
 }
 
+#[allow(dead_code)]
 pub mod error
 {
     pub const NO_SUCH_NICK         : &'static str = "401";
@@ -157,8 +159,6 @@ pub mod error
 #[derive(Debug, PartialEq)]
 pub enum MessageParseError
 {
-    NeedMoreParams,
-    UnknownCommand,
     SyntaxError,
 }
 

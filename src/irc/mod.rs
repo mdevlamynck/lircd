@@ -3,7 +3,7 @@ extern crate mioco;
 use std::io::{self, Read, Write};
 use std::sync::Arc;
 use std::collections::HashMap;
-use error::NetResult;
+use error::{NetResult, NetError};
 use self::mioco::sync::{Mutex, RwLock};
 use net::{StatefullProtocol, StatefullHandle};
 use reader::{MaxLengthedBufRead, MaxLengthedBufReader};
@@ -56,7 +56,11 @@ impl<Output> StatefullHandle<Output> for IrcHandle<Output>
         for line in input_reader.lines_without_too_long() {
             let request = line.unwrap();
 
-            command::dispatch_command(&self, request)?;
+            match command::dispatch_command(&self, request) {
+                Ok(_)                          => continue,
+                Err(NetError::CloseConnection) => break,
+                Err(err)                       => return Err(err),
+            }
         }
 
         Ok(())
@@ -140,7 +144,8 @@ pub struct Client<Output>
 
     pub nickname:    String, // user nickname
     //pub hostname:    String, // name of client's host
-    //pub username:    String, // name of the user on that host
+    pub username:    String, // name of the user on that host
+    pub realname:    String, // name of the user on that host
     //pub server:      String, // server the client is connected to
     //pub is_operator: bool,   // has operator rights on this server
 
@@ -162,6 +167,8 @@ impl<Output> Client<Output>
         Client::<Output> {
             output:   output,
             nickname: String::new(),
+            username: String::new(),
+            realname: String::new(),
         }
     }
 }
