@@ -115,8 +115,8 @@ impl<Output> Write for Connection<Output>
     fn write(&mut self, buf: &[u8]) -> io::Result<usize>
     {
         match *self {
-            Connection::Client(ref mut client)  => unimplemented!(),
-            Connection::Server(ref mut server)  => unimplemented!(),
+            Connection::Client(ref mut client)  => client.write(buf),
+            Connection::Server(ref mut server)  => server.write(buf),
             Connection::Unknown(ref mut output) => output.lock().unwrap().write(buf),
         }
     }
@@ -124,8 +124,8 @@ impl<Output> Write for Connection<Output>
     fn flush(&mut self) -> io::Result<()>
     {
         match *self {
-            Connection::Client(ref mut client)  => unimplemented!(),
-            Connection::Server(ref mut server)  => unimplemented!(),
+            Connection::Client(ref mut client)  => client.flush(),
+            Connection::Server(ref mut server)  => server.flush(),
             Connection::Unknown(ref mut output) => output.lock().unwrap().flush(),
         }
     }
@@ -160,6 +160,17 @@ pub struct Channel<Output>
     pub operator: String, // nickname of this channel's operator
 }
 
+impl<Output> Server<Output>
+{
+    pub fn new(output: Arc<Mutex<Output>>) -> Self
+    {
+        Server::<Output> {
+            output: output,
+            name:   String::new(),
+        }
+    }
+}
+
 impl<Output> Client<Output>
 {
     pub fn new(output: Arc<Mutex<Output>>) -> Self
@@ -170,6 +181,34 @@ impl<Output> Client<Output>
             username: String::new(),
             realname: String::new(),
         }
+    }
+}
+
+impl<Output> Write for Server<Output>
+    where Output: Write
+{
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize>
+    {
+        self.output.lock().unwrap().write(buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()>
+    {
+        self.output.lock().unwrap().flush()
+    }
+}
+
+impl<Output> Write for Client<Output>
+    where Output: Write
+{
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize>
+    {
+        self.output.lock().unwrap().write(buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()>
+    {
+        self.output.lock().unwrap().flush()
     }
 }
 

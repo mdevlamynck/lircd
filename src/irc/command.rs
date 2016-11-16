@@ -1,4 +1,4 @@
-use irc::message::{Message, reply, error as err};
+use irc::message::{Message, reply, reply as rep, error as err};
 use irc::{IrcHandle, Connection, Client};
 use error::{NetResult, NetError};
 use config::Config;
@@ -110,6 +110,8 @@ fn user<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
         if let Connection::Client(ref mut client) = *connection {
             client.username = username.clone();
             client.realname = realname.clone();
+
+            client.write_all(format!("{r} :Welcome to LIrcD\r\n", r=rep::WELCOME).as_bytes())?;
         }
     } else {
         need_more_params(handle, message);
