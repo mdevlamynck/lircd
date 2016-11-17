@@ -16,6 +16,7 @@ env_logger = "*"
 log = "*"
 memchr = "*"
 simple-signal = "*"
+resolve = "*"
 
 [dev-dependencies]
 rand = "*"

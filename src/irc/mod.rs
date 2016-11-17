@@ -1,4 +1,5 @@
 extern crate mioco;
+extern crate resolve;
 
 use std::io::{self, Read, Write};
 use std::sync::Arc;
@@ -25,8 +26,12 @@ impl<Output> StatefullProtocol<Output> for IrcProtocol<Output>
 {
     type Handle = IrcHandle<Output>;
 
-    fn new(config: Config) -> Self
+    fn new(mut config: Config) -> Self
     {
+        if let Ok(hostname) = resolve::hostname::get_hostname() {
+            config.hostname = hostname;
+        }
+
         IrcProtocol::<Output> {
             state: Arc::new(RwLock::new(Irc::new(config))),
         }

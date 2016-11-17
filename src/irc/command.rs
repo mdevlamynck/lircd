@@ -10,6 +10,7 @@ pub fn dispatch_command<Output>(handle: &IrcHandle<Output>, request: String) -> 
     match request.parse::<Message>() {
         Ok(message)    => match message.command.as_ref() {
             "PASS"     => pass(handle, &message),
+            "SERVER"   => server(handle, &message),
             "NICK"     => nick(handle, &message),
             "USER"     => user(handle, &message),
             "OPER"     => oper(handle, &message),
@@ -18,6 +19,7 @@ pub fn dispatch_command<Output>(handle: &IrcHandle<Output>, request: String) -> 
             "QUIT"     => quit(handle, &message),
             "SQUIT"    => squit(handle, &message),
             "JOIN"     => join(handle, &message),
+            "NJOIN"    => njoin(handle, &message),
             "PART"     => part(handle, &message),
             "TOPIC"    => topic(handle, &message),
             "NAMES"    => names(handle, &message),
@@ -73,6 +75,12 @@ fn pass<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     Ok(())
 }
 
+fn server<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
+    where Output: Write
+{
+    unimplemented_command(handle, message)
+}
+
 fn nick<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
@@ -111,7 +119,9 @@ fn user<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
             client.username = username.clone();
             client.realname = realname.clone();
 
-            client.write_all(format!("{r} :Welcome to LIrcD\r\n", r=rep::WELCOME).as_bytes())?;
+            let mut irc    = handle.state.read().unwrap();
+            let mut config = irc.config.read().unwrap();
+            client.write_all(format!("{r} :{m}\r\n", r=rep::WELCOME, m=&config.welcome).as_bytes())?;
         }
     } else {
         need_more_params(handle, message);
@@ -170,6 +180,12 @@ fn squit<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
 }
 
 fn join<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
+    where Output: Write
+{
+    unimplemented_command(handle, message)
+}
+
+fn njoin<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     unimplemented_command(handle, message)
