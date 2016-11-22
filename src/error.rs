@@ -1,6 +1,6 @@
 extern crate mioco;
 
-use std::{net, io, result, error, fmt};
+use std::{net, io, result, fmt};
 use std::error::Error;
 
 #[derive(Debug)]

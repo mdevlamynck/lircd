@@ -37,12 +37,10 @@ pub fn run(config: Config)
             });
 
             if config.is_unix {
-                listen::<mioco::unix::UnixListener, Async>(config)?;
+                listen::<mioco::unix::UnixListener, Async>(config)
             } else {
-                listen::<mioco::tcp::TcpListener, Async>(config)?;
+                listen::<mioco::tcp::TcpListener, Async>(config)
             }
-
-            Ok(())
         });
 
         Signals::set_handler(&[Signal::Term, Signal::Int], move |signals| {
@@ -60,15 +58,11 @@ pub fn run(config: Config)
             Err(_) => info!("Stopped by signal"),
         }
     } else {
-        Blocking::spawn(move || -> NetResult {
-            if config.is_unix {
-                listen::<std::os::unix::net::UnixListener, Blocking>(config)?;
-            } else {
-                listen::<std::net::TcpListener, Blocking>(config)?;
-            }
-
-            Ok(())
-        });
+        if config.is_unix {
+            listen::<std::os::unix::net::UnixListener, Blocking>(config);
+        } else {
+            listen::<std::net::TcpListener, Blocking>(config);
+        }
     }
 }
 

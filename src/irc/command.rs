@@ -1,7 +1,6 @@
-use irc::message::{Message, reply, reply as rep, error as err};
+use irc::message::{Message, reply as rep, error as err};
 use irc::{IrcHandle, Connection, Client};
 use error::{NetResult, NetError};
-use config::Config;
 use std::io::Write;
 
 pub fn dispatch_command<Output>(handle: &IrcHandle<Output>, request: String) -> NetResult
@@ -62,7 +61,7 @@ pub fn dispatch_command<Output>(handle: &IrcHandle<Output>, request: String) -> 
     }
 }
 
-fn pass<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
+fn pass<Output>(handle: &IrcHandle<Output>, _: &Message) -> NetResult
     where Output: Write
 {
     let mut connection = handle.connection.lock().unwrap();
@@ -97,11 +96,11 @@ fn nick<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
         if let Connection::Client(ref mut client) = *connection {
             client.nickname = new_nickname.clone();
         }
-    } else {
-        need_more_params(handle, message);
-    }
 
-    Ok(())
+        Ok(())
+    } else {
+        need_more_params(handle, message)
+    }
 }
 
 fn user<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
@@ -111,7 +110,7 @@ fn user<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
 
     if arguments.len() >= 4 {
         let ref username   = arguments[0];
-        let ref mode       = arguments[1];
+        //let ref mode       = arguments[1];
         let ref realname   = arguments[3];
 
         let mut connection = handle.connection.lock().unwrap();
@@ -119,15 +118,15 @@ fn user<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
             client.username = username.clone();
             client.realname = realname.clone();
 
-            let mut irc    = handle.state.read().unwrap();
-            let mut config = irc.config.read().unwrap();
+            let irc    = handle.state.read().unwrap();
+            let config = irc.config.read().unwrap();
             client.write_all(format!("{r} :{m}\r\n", r=rep::WELCOME, m=&config.welcome).as_bytes())?;
         }
-    } else {
-        need_more_params(handle, message);
-    }
 
-    Ok(())
+        Ok(())
+    } else {
+        need_more_params(handle, message)
+    }
 }
 
 fn oper<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
@@ -164,7 +163,7 @@ fn service<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     unimplemented_command(handle, message)
 }
 
-fn quit<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
+fn quit<Output>(handle: &IrcHandle<Output>, _: &Message) -> NetResult
     where Output: Write
 {
     let mut connection = handle.connection.lock().unwrap();
@@ -427,7 +426,7 @@ fn unknown_command<Output>(handle: &IrcHandle<Output>, message: &Message) -> Net
     Ok(())
 }
 
-fn no_command<Output>(handle: &IrcHandle<Output>) -> NetResult
+fn no_command<Output>(_: &IrcHandle<Output>) -> NetResult
     where Output: Write
 {
     Ok(())
@@ -452,10 +451,8 @@ mod test
     use std::sync::Arc;
     use std::str;
     use irc::IrcHandle;
-    use irc::IrcState;
     use irc::Irc;
     use config::Config;
-    use irc::message::Message;
     use super::dispatch_command;
 
     #[test]
@@ -465,8 +462,8 @@ mod test
         let config     = Config::default();
 
         {
-            let mut state  = Arc::new(RwLock::new(Irc::new(config)));
-            let mut handle = IrcHandle::new(state.clone(), &mut buffer);
+            let state  = Arc::new(RwLock::new(Irc::new(config)));
+            let handle = IrcHandle::new(state.clone(), &mut buffer);
 
             let message    = "some_gibberish".to_string();
 
@@ -484,8 +481,8 @@ mod test
         let config     = Config::default();
 
         {
-            let mut state  = Arc::new(RwLock::new(Irc::new(config)));
-            let mut handle = IrcHandle::new(state.clone(), &mut buffer);
+            let state  = Arc::new(RwLock::new(Irc::new(config)));
+            let handle = IrcHandle::new(state.clone(), &mut buffer);
 
             let message    = "ISON".to_string();
 
@@ -503,8 +500,8 @@ mod test
         let config     = Config::default();
 
         {
-            let mut state  = Arc::new(RwLock::new(Irc::new(config)));
-            let mut handle = IrcHandle::new(state.clone(), &mut buffer);
+            let state  = Arc::new(RwLock::new(Irc::new(config)));
+            let handle = IrcHandle::new(state.clone(), &mut buffer);
 
             let message    = "".to_string();
 
