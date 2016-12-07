@@ -445,9 +445,7 @@ fn need_more_params<Output>(handle: &IrcHandle<Output>, message: &Message) -> Ne
 #[cfg(test)]
 mod test
 {
-    extern crate mioco;
-
-    use self::mioco::sync::RwLock;
+    use mioco::sync::RwLock;
     use std::sync::Arc;
     use std::str;
     use irc::IrcHandle;

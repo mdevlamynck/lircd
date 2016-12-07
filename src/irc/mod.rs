@@ -1,11 +1,10 @@
-extern crate mioco;
 extern crate resolve;
 
 use std::io::{self, Read, Write};
 use std::sync::Arc;
 use std::collections::HashMap;
 use error::{NetResult, NetError};
-use self::mioco::sync::{Mutex, RwLock};
+use mioco::sync::{Mutex, RwLock};
 use net::{StatefullProtocol, StatefullHandle};
 use reader::{MaxLengthedBufRead, MaxLengthedBufReader};
 use config::Config;

@@ -1,6 +1,14 @@
-use std::default::Default;
+extern crate toml;
 
-#[derive(Debug, Clone, PartialEq)]
+use std::default::Default;
+use std::io::{Read, Write, Result, Error, ErrorKind};
+use std::mem;
+use std::path::Path;
+use std::fs::File;
+
+const DEFAULT_CONFIG_PATH: &'static str = "~/.lircd.conf";
+
+#[derive(Debug, Clone, PartialEq, RustcEncodable, RustcDecodable)]
 pub struct Config
 {
     // Network
@@ -29,6 +37,34 @@ impl Config
             timeout:        240,
             welcome:        "Welcome to lircd".to_string(),
         }
+    }
+
+    pub fn load() -> Config
+    {
+        File::open(&Path::new(DEFAULT_CONFIG_PATH))
+            .and_then(|mut file| {
+                let mut file_content = String::new();
+                let _                = file.read_to_string(&mut file_content)?;
+                let config           = toml::decode_str(&file_content)
+                    .ok_or_else(|| Error::new(ErrorKind::InvalidData, "Can't read configuration file"))?;
+
+                Ok(config)
+            }).unwrap_or(Config::new())
+    }
+
+    pub fn reload(&mut self)
+    {
+        let new_config = Config::load();
+        mem::replace(self, new_config);
+    }
+
+    pub fn save(&self) -> Result<()>
+    {
+        File::create(&Path::new(DEFAULT_CONFIG_PATH))
+            .and_then(|mut file| file.write_all(toml::encode_str(self).as_bytes()))
+            .unwrap_or_else(|err| error!("Unable to save configuration: {}", err) );
+
+        Ok(())
     }
 }
 
@@ -65,5 +101,30 @@ mod test
         assert_eq!("Ch4ng3Th1sP4ssw0rd", &config.password);
         assert_eq!(240, config.timeout);
         assert_eq!("Welcome to lircd", &config.welcome);
+    }
+
+    #[test]
+    fn load_valid_data()
+    {
+    }
+
+    #[test]
+    fn load_invalid_data()
+    {
+    }
+
+    #[test]
+    fn write_success()
+    {
+    }
+
+    #[test]
+    fn write_error()
+    {
+    }
+
+    #[test]
+    fn reload()
+    {
     }
 }

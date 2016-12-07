@@ -1,5 +1,3 @@
-extern crate mioco;
-
 use std::str::FromStr;
 
 pub struct Message

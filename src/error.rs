@@ -1,5 +1,3 @@
-extern crate mioco;
-
 use std::{net, io, result, fmt};
 use std::error::Error;
 

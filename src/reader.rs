@@ -166,8 +166,6 @@ fn append_to_string<F>(buf: &mut String, f: F) -> io::Result<usize>
 #[cfg(test)]
 mod test
 {
-    extern crate memchr;
-
     use std::io::ErrorKind;
     use super::{MaxLengthedBufRead, MaxLengthedBufReader, MAX_BUFFER_SIZE};
 

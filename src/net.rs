@@ -1,9 +1,8 @@
 extern crate mioco;
-extern crate simple_signal;
 
 use std;
 use std::io::{Read, Write};
-use self::simple_signal::{Signals, Signal};
+use simple_signal::{Signals, Signal};
 use irc::IrcProtocol;
 use config::Config;
 use error::NetResult;

@@ -1,5 +1,8 @@
 #[macro_use]
 extern crate log;
+extern crate rustc_serialize;
+extern crate mioco;
+extern crate simple_signal;
 
 pub mod irc;
 pub mod net;

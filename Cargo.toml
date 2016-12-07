@@ -17,6 +17,8 @@ log = "*"
 memchr = "*"
 simple-signal = "*"
 resolve = "*"
+rustc-serialize = "*"
+toml = "*"
 
 [dev-dependencies]
 rand = "*"
