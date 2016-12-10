@@ -26,7 +26,7 @@ pub trait StatefullHandle<Output>
 
 pub fn run(config: Config)
 {
-    if config.use_async {
+    if config.network.use_async {
         let (shutdown_tx, shutdown_rx) = mioco::sync::mpsc::channel();
 
         let join_handle = mioco::spawn(move || -> NetResult {
@@ -35,11 +35,7 @@ pub fn run(config: Config)
                 mioco::shutdown();
             });
 
-            if config.is_unix {
-                listen::<mioco::unix::UnixListener, Async>(config)
-            } else {
-                listen::<mioco::tcp::TcpListener, Async>(config)
-            }
+            listen::<mioco::tcp::TcpListener, Async>(config)
         });
 
         Signals::set_handler(&[Signal::Term, Signal::Int], move |signals| {
@@ -57,11 +53,7 @@ pub fn run(config: Config)
             Err(_) => info!("Stopped by signal"),
         }
     } else {
-        if config.is_unix {
-            listen::<std::os::unix::net::UnixListener, Blocking>(config);
-        } else {
-            listen::<std::net::TcpListener, Blocking>(config);
-        }
+        let _ = listen::<std::net::TcpListener, Blocking>(config);
     }
 }
 
@@ -69,7 +61,7 @@ fn listen<L, S>(config: Config) -> NetResult
     where L: Listen,
           S: Spawn<NetResult>
 {
-    let listener = L::bind(&config.listen_address)?;
+    let listener = L::bind(&config.network.listen_address)?;
     let protocol = IrcProtocol::<L::Stream>::new(config);
 
     loop {

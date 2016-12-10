@@ -72,54 +72,6 @@ impl Stream for std::net::TcpStream
     }
 }
 
-impl Listen for mioco::unix::UnixListener
-{
-    type Stream = mioco::unix::UnixStream;
-
-    fn bind(address: &str) -> Result<Self>
-    {
-        Ok(Self::bind(address)?)
-    }
-
-    fn accept(&self) -> Result<Self::Stream>
-    {
-        Ok(Self::accept(self)?)
-    }
-}
-
-impl Stream for mioco::unix::UnixStream
-{
-    fn try_clone(&self) -> Result<Self>
-    {
-        Ok(Self::try_clone(self)?)
-    }
-}
-
-impl Listen for std::os::unix::net::UnixListener
-{
-    type Stream = std::os::unix::net::UnixStream;
-
-    fn bind(address: &str) -> Result<Self>
-    {
-        Ok(Self::bind(address)?)
-    }
-
-    fn accept(&self) -> Result<Self::Stream>
-    {
-        let (stream, _) = Self::accept(self)?;
-
-        Ok(stream)
-    }
-}
-
-impl Stream for std::os::unix::net::UnixStream
-{
-    fn try_clone(&self) -> Result<Self>
-    {
-        Ok(Self::try_clone(self)?)
-    }
-}
-
 pub trait Spawn<T>
     where T: Send + 'static
 {

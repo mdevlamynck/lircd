@@ -120,7 +120,7 @@ fn user<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
 
             let irc    = handle.state.read().unwrap();
             let config = irc.config.read().unwrap();
-            client.write_all(format!("{r} :{m}\r\n", r=rep::WELCOME, m=&config.welcome).as_bytes())?;
+            client.write_all(format!("{r} :{m}\r\n", r=rep::WELCOME, m=&config.irc.welcome).as_bytes())?;
         }
 
         Ok(())

@@ -10,5 +10,6 @@ fn main() {
         println!("ERROR: original error: {}", e);
     });
 
-    net::run(config::Config::default());
+    config::Config::create_if_doesnt_exist();
+    net::run(config::Config::load());
 }
