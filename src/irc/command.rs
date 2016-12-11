@@ -61,14 +61,17 @@ pub fn dispatch_command<Output>(handle: &IrcHandle<Output>, request: String) -> 
     }
 }
 
-fn pass<Output>(handle: &IrcHandle<Output>, _: &Message) -> NetResult
+fn pass<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     where Output: Write
 {
     let mut connection = handle.connection.lock().unwrap();
 
     match *connection {
-        Connection::Unknown(_) => Ok(()),
-        _                      => connection.write_all(format!("{r}\r\n", r=err::ALREADY_REGISTERED).as_bytes()),
+        Connection::Unknown(_) => {
+            let _ = unimplemented_command(handle, message);
+            Ok(())
+        },
+        _ => connection.write_all(format!("{r}\r\n", r=err::ALREADY_REGISTERED).as_bytes()),
     }?;
 
     Ok(())
@@ -88,7 +91,7 @@ fn nick<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
     if arguments.len() >= 1 {
         let ref new_nickname = arguments[0];
 
-        let mut connection   = handle.connection.lock().unwrap();
+        let mut connection = handle.connection.lock().unwrap();
         if let Connection::Unknown(_) = *connection {
             *connection = Connection::Client(Client::new(handle.output.clone()));
         }
@@ -96,6 +99,8 @@ fn nick<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
         if let Connection::Client(ref mut client) = *connection {
             client.nickname = new_nickname.clone();
         }
+
+        // TODO warn other clients the nick has changed
 
         Ok(())
     } else {
@@ -120,7 +125,7 @@ fn user<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
 
             let irc    = handle.state.read().unwrap();
             let config = irc.config.read().unwrap();
-            client.write_all(format!("{r} :{m}\r\n", r=rep::WELCOME, m=&config.irc.welcome).as_bytes())?;
+            client.write_all(format!("{r} :{m}\r\n", r=rep::WELCOME, m=&config.inner.irc.welcome).as_bytes())?;
         }
 
         Ok(())
@@ -168,6 +173,8 @@ fn quit<Output>(handle: &IrcHandle<Output>, _: &Message) -> NetResult
 {
     let mut connection = handle.connection.lock().unwrap();
     connection.write_all("ERROR\r\n".as_bytes())?;
+
+    // TODO warn other clients this client has disconnected
 
     Err(NetError::CloseConnection)
 }

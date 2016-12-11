@@ -2,7 +2,7 @@ extern crate mioco;
 
 use std;
 use std::io::{Read, Write};
-use simple_signal::{Signals, Signal};
+use simple_signal::{self, Signal};
 use irc::IrcProtocol;
 use config::Config;
 use error::NetResult;
@@ -26,7 +26,7 @@ pub trait StatefullHandle<Output>
 
 pub fn run(config: Config)
 {
-    if config.network.use_async {
+    if config.inner.network.use_async {
         let (shutdown_tx, shutdown_rx) = mioco::sync::mpsc::channel();
 
         let join_handle = mioco::spawn(move || -> NetResult {
@@ -38,7 +38,7 @@ pub fn run(config: Config)
             listen::<mioco::tcp::TcpListener, Async>(config)
         });
 
-        Signals::set_handler(&[Signal::Term, Signal::Int], move |signals| {
+        simple_signal::set_handler(&[Signal::Term, Signal::Int], move |signals| {
             info!("Recieved signal {:?}, stopping...", signals);
             shutdown_tx.send(()).unwrap();
         });
@@ -61,7 +61,7 @@ fn listen<L, S>(config: Config) -> NetResult
     where L: Listen,
           S: Spawn<NetResult>
 {
-    let listener = L::bind(&config.network.listen_address)?;
+    let listener = L::bind(&config.inner.network.listen_address)?;
     let protocol = IrcProtocol::<L::Stream>::new(config);
 
     loop {

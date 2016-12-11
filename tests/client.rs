@@ -17,9 +17,9 @@ mod functional
 
     fn init_serv() -> (&'static str, u16)
     {
-        let port: u16         = thread_rng().gen_range(6000, 6999);
-        let mut config        = config::Config::new();
-        config.listen_address = format!("{}:{}", TEST_LISTEN_ADDR, port);
+        let port: u16                       = thread_rng().gen_range(6000, 6999);
+        let mut config                      = config::Config::new();
+        config.inner.network.listen_address = format!("{}:{}", TEST_LISTEN_ADDR, port);
 
         thread::spawn(move || {
             net::run(config);

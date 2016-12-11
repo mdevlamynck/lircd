@@ -19,6 +19,7 @@ simple-signal = "*"
 resolve = "*"
 rustc-serialize = "*"
 toml = "*"
+docopt = { git = "https://github.com/mdevlamynck/docopt.rs.git" }
 
 [dev-dependencies]
 rand = "*"

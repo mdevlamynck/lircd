@@ -7,8 +7,15 @@ use std::path::PathBuf;
 use std::fs::File;
 use std::env::home_dir;
 
-#[derive(Debug, Clone, PartialEq, RustcEncodable, RustcDecodable)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Config
+{
+    pub inner: InnerConfig,
+    pub path:  PathBuf,
+}
+
+#[derive(Debug, Clone, PartialEq, RustcEncodable, RustcDecodable)]
+pub struct InnerConfig
 {
     pub network: Network,
     pub irc:     Irc,
@@ -30,19 +37,36 @@ pub struct Irc
     pub welcome:        String,
 }
 
+impl InnerConfig
+{
+    pub fn new() -> InnerConfig
+    {
+        InnerConfig {
+            network: Network::new(),
+            irc:     Irc::new(),
+        }
+    }
+}
+
 impl Config
 {
     pub fn new() -> Config
     {
         Config {
-            network: Network::new(),
-            irc:     Irc::new(),
+            inner: InnerConfig::new(),
+            path:  Config::default_path()
         }
     }
 
     pub fn load() -> Config
     {
-        File::open(&Config::default_path())
+        let path = Config::default_path();
+        Config::load_from(path)
+    }
+
+    pub fn load_from(path: PathBuf) -> Config
+    {
+        let config = File::open(&path)
             .and_then(|mut file| {
                 let mut file_content = String::new();
                 let _                = file.read_to_string(&mut file_content)?;
@@ -50,29 +74,31 @@ impl Config
                     .ok_or_else(|| Error::new(ErrorKind::InvalidData, "Can't read configuration file"))?;
 
                 Ok(config)
-            }).unwrap_or(Config::new())
+            }).unwrap_or(InnerConfig::new());
+
+        Config {
+            inner: config,
+            path: path
+        }
     }
 
     pub fn reload(&mut self)
     {
-        let new_config = Config::load();
+        let new_config = Config::load_from(self.path.clone());
         mem::replace(self, new_config);
     }
 
     pub fn save(&self)
     {
-        File::create(&Config::default_path())
-            .and_then(|mut file| file.write_all(toml::encode_str(self).as_bytes()))
+        File::create(&self.path)
+            .and_then(|mut file| file.write_all(toml::encode_str(&self.inner).as_bytes()))
             .unwrap_or_else(|err| error!("Unable to save configuration: {}", err));
     }
 
-    pub fn create_if_doesnt_exist()
+    pub fn create_if_doesnt_exist(&self)
     {
-        let path = Config::default_path();
-
-        if !path.is_file() {
-            let config = Config::default();
-            config.save();
+        if !self.path.is_file() {
+            self.save();
         }
     }
 
@@ -150,13 +176,13 @@ mod test
     {
         let config = super::Config::default();
 
-        assert_eq!("0.0.0.0:6667", &config.network.listen_address);
-        assert_eq!(true, config.network.use_async);
-        assert_eq!("localhost", &config.network.hostname);
+        assert_eq!("0.0.0.0:6667", &config.inner.network.listen_address);
+        assert_eq!(true, config.inner.network.use_async);
+        assert_eq!("localhost", &config.inner.network.hostname);
 
-        assert_eq!("Ch4ng3Th1sP4ssw0rd", &config.irc.password);
-        assert_eq!(240, config.timeout);
-        assert_eq!("Welcome to lircd", &config.irc.welcome);
+        assert_eq!("Ch4ng3Th1sP4ssw0rd", &config.inner.irc.password);
+        assert_eq!(240, config.inner.irc.timeout);
+        assert_eq!("Welcome to lircd", &config.inner.irc.welcome);
     }
 
     #[test]
