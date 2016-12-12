@@ -27,6 +27,7 @@ pub struct Network
     pub listen_address: String,
     pub use_async:      bool,
     pub hostname:       String,
+    pub use_tls:        bool,
 }
 
 #[derive(Debug, Clone, PartialEq, RustcEncodable, RustcDecodable)]
@@ -119,6 +120,7 @@ impl Network
             listen_address: "0.0.0.0:6667".to_string(),
             use_async:      true,
             hostname:       "localhost".to_string(),
+            use_tls:        false,
         }
     }
 }
@@ -202,6 +204,7 @@ mod test
         assert_eq!("0.0.0.0:6667", &config.inner.network.listen_address);
         assert_eq!(true, config.inner.network.use_async);
         assert_eq!("localhost", &config.inner.network.hostname);
+        assert_eq!(false, config.inner.network.use_tls);
 
         assert_eq!("Ch4ng3Th1sP4ssw0rd", &config.inner.irc.password);
         assert_eq!(240, config.inner.irc.timeout);
@@ -225,6 +228,7 @@ mod test
                         hostname = "somehost"
                         listen_address = "0.0.0.0:42"
                         use_async = false
+                        use_tls = true
                     "#).as_bytes()))
                 .unwrap();
 
@@ -233,6 +237,7 @@ mod test
             assert_eq!("0.0.0.0:42", &config.inner.network.listen_address);
             assert_eq!(false, config.inner.network.use_async);
             assert_eq!("somehost", &config.inner.network.hostname);
+            assert_eq!(true, config.inner.network.use_tls);
 
             assert_eq!("somepassword", &config.inner.irc.password);
             assert_eq!(42, config.inner.irc.timeout);
@@ -291,6 +296,7 @@ mod test
                     hostname = "localhost"
                     listen_address = "0.0.0.0:6667"
                     use_async = true
+                    use_tls = false
                 "#),
                 file_content
             );
@@ -319,6 +325,7 @@ mod test
                         hostname = "somehost"
                         listen_address = "0.0.0.0:42"
                         use_async = false
+                        use_tls = true
                     "#).as_bytes()))
                 .unwrap();
 
@@ -327,6 +334,7 @@ mod test
             assert_eq!("0.0.0.0:42", &config.inner.network.listen_address);
             assert_eq!(false, config.inner.network.use_async);
             assert_eq!("somehost", &config.inner.network.hostname);
+            assert_eq!(true, config.inner.network.use_tls);
 
             assert_eq!("somepassword", &config.inner.irc.password);
             assert_eq!(42, config.inner.irc.timeout);
