@@ -11,18 +11,20 @@ name = "lircd"
 doc = false
 
 [dependencies]
-mioco = "*"
+docopt = { git = "https://github.com/mdevlamynck/docopt.rs.git" }
 env_logger = "*"
 log = "*"
 memchr = "*"
-simple-signal = "*"
+mioco = "*"
 resolve = "*"
 rustc-serialize = "*"
+simple-signal = "*"
 toml = "*"
-docopt = { git = "https://github.com/mdevlamynck/docopt.rs.git" }
+unindent = "*"
 
 [dev-dependencies]
 rand = "*"
+tempdir = "*"
 
 [features]
 unstable = []

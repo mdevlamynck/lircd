@@ -3,7 +3,7 @@ extern crate toml;
 use std::default::Default;
 use std::io::{Read, Write, Error, ErrorKind};
 use std::mem;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::fs::File;
 use std::env::home_dir;
 
@@ -61,10 +61,10 @@ impl Config
     pub fn load() -> Config
     {
         let path = Config::default_path();
-        Config::load_from(path)
+        Config::load_from(&path)
     }
 
-    pub fn load_from(path: PathBuf) -> Config
+    pub fn load_from(path: &Path) -> Config
     {
         let config = File::open(&path)
             .and_then(|mut file| {
@@ -78,13 +78,13 @@ impl Config
 
         Config {
             inner: config,
-            path: path
+            path:  path.to_path_buf(),
         }
     }
 
     pub fn reload(&mut self)
     {
-        let new_config = Config::load_from(self.path.clone());
+        let new_config = Config::load_from(&self.path);
         mem::replace(self, new_config);
     }
 
@@ -162,8 +162,31 @@ impl Default for Irc
 #[cfg(test)]
 mod test
 {
+    extern crate tempdir;
+
+    use unindent::unindent;
+    use std::fs::File;
+    use std::path::Path;
+    use std::io::{Read, Write};
+    use std::panic;
+    use super::*;
+
+    fn in_tmp_dir<T>(test: T) -> ()
+        where T: FnOnce(&Path) -> () + panic::UnwindSafe
+    {
+        let tmp_dir = tempdir::TempDir::new("test").unwrap();
+
+        let result = panic::catch_unwind(|| {
+            test(tmp_dir.path());
+        });
+
+        tmp_dir.close().unwrap();
+
+        assert!(result.is_ok())
+    }
+
     #[test]
-    fn config_new()
+    fn new()
     {
         let new     = super::Config::new();
         let default = super::Config::default();
@@ -172,7 +195,7 @@ mod test
     }
 
     #[test]
-    fn config_default()
+    fn default()
     {
         let config = super::Config::default();
 
@@ -186,27 +209,130 @@ mod test
     }
 
     #[test]
-    fn load_valid_data()
+    fn load_from_valid_data()
     {
+        in_tmp_dir(|tmp_dir| {
+            let path = tmp_dir.join("config.toml");
+
+            File::create(&path)
+                .and_then(|mut f| f.write_all(&unindent(r#"
+                        [irc]
+                        password = "somepassword"
+                        timeout = 42
+                        welcome = "some welcome"
+
+                        [network]
+                        hostname = "somehost"
+                        listen_address = "0.0.0.0:42"
+                        use_async = false
+                    "#).as_bytes()))
+                .unwrap();
+
+            let config = Config::load_from(&path);
+
+            assert_eq!("0.0.0.0:42", &config.inner.network.listen_address);
+            assert_eq!(false, config.inner.network.use_async);
+            assert_eq!("somehost", &config.inner.network.hostname);
+
+            assert_eq!("somepassword", &config.inner.irc.password);
+            assert_eq!(42, config.inner.irc.timeout);
+            assert_eq!("some welcome", &config.inner.irc.welcome);
+
+            assert_eq!(path, config.path);
+        });
     }
 
     #[test]
-    fn load_invalid_data()
+    fn load_from_invalid_data_load_default_data()
     {
+        in_tmp_dir(|tmp_dir| {
+            let path = tmp_dir.join("config.toml");
+
+            File::create(&path)
+                .and_then(|mut f| f.write_all(&unindent(r#"
+                        [invalid]
+                        invalid = "invalid"
+                    "#).as_bytes()))
+                .unwrap();
+
+            let config = Config::load_from(&path);
+
+            let mut expected = Config::default();
+            expected.path    = path;
+            assert_eq!(expected, config);
+        });
     }
 
     #[test]
-    fn write_success()
+    fn save()
     {
-    }
+        in_tmp_dir(|tmp_dir| {
+            let path        = tmp_dir.join("config.toml");
+            let mut config  = Config::default();
+            config.path     = path.clone();
 
-    #[test]
-    fn write_error()
-    {
+            assert!(!path.is_file());
+
+            config.save();
+            
+            assert!(path.is_file());
+
+            let mut file = File::open(&path).unwrap();
+            let mut file_content = String::new();
+            let _                = file.read_to_string(&mut file_content).unwrap();
+
+            assert_eq!(unindent(r#"
+                    [irc]
+                    password = "Ch4ng3Th1sP4ssw0rd"
+                    timeout = 240
+                    welcome = "Welcome to lircd"
+
+                    [network]
+                    hostname = "localhost"
+                    listen_address = "0.0.0.0:6667"
+                    use_async = true
+                "#),
+                file_content
+            );
+        });
     }
 
     #[test]
     fn reload()
     {
+        in_tmp_dir(|tmp_dir| {
+            let path       = tmp_dir.join("config.toml");
+            let mut config = Config::load_from(&path);
+
+            let mut expected = Config::default();
+            expected.path    = path.clone();
+            assert_eq!(expected, config);
+
+            File::create(&path)
+                .and_then(|mut f| f.write_all(&unindent(r#"
+                        [irc]
+                        password = "somepassword"
+                        timeout = 42
+                        welcome = "some welcome"
+
+                        [network]
+                        hostname = "somehost"
+                        listen_address = "0.0.0.0:42"
+                        use_async = false
+                    "#).as_bytes()))
+                .unwrap();
+
+            config.reload();
+
+            assert_eq!("0.0.0.0:42", &config.inner.network.listen_address);
+            assert_eq!(false, config.inner.network.use_async);
+            assert_eq!("somehost", &config.inner.network.hostname);
+
+            assert_eq!("somepassword", &config.inner.irc.password);
+            assert_eq!(42, config.inner.irc.timeout);
+            assert_eq!("some welcome", &config.inner.irc.welcome);
+
+            assert_eq!(path, config.path);
+        });
     }
 }
