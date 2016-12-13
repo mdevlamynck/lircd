@@ -2,6 +2,11 @@
 name = "lircd"
 version = "0.0.1"
 authors = [ "Matthias Devlamynck <matthias.devlamynck@mailoo.org>" ]
+repository = "https://github.com/mdevlamynck/lircd"
+license = "AGPL-3.0+"
+readme = "README.md"
+description = "IRC  erver in Rust, just to try out the language. This has no intention of being a production project yet."
+keywords = ["irc", "server"]
 
 [lib]
 name = "lircd"
