@@ -18,22 +18,21 @@
 // at matthias.devlamynck@mailoo.org. The official repository for this
 // project is https://github.com/mdevlamynck/lircd.
 
-extern crate mioco;
+extern crate futures;
+extern crate tokio_core;
+extern crate tokio_signal;
+extern crate libc;
 
-use std;
+
 use std::io::{Read, Write};
-use simple_signal::{self, Signal};
-use irc::IrcProtocol;
-use config::Config;
 use error::NetResult;
-use common_api::{Listen, Stream, Spawn, Async, Blocking};
 
 pub trait StatefullProtocol<Output>
     where Output: Write
 {
     type Handle: StatefullHandle<Output>;
 
-    fn new(config: Config) -> Self;
+    fn new() -> Self;
 
     fn new_connection(&self, output: Output) -> Self::Handle;
 }
@@ -44,84 +43,106 @@ pub trait StatefullHandle<Output>
     fn consume<Input: Read>(self, input: Input) -> NetResult;
 }
 
-pub fn run(config: Config)
+use self::futures::{Future, Stream, Sink};
+use self::tokio_core::reactor::{Core, Handle};
+use self::tokio_core::net::TcpListener;
+use self::tokio_core::io::Io;
+use self::tokio_signal::unix::{Signal, SIGHUP, SIGINT, SIGTERM};
+use std::str::FromStr;
+use std::net::SocketAddr;
+use std::io;
+use std::str;
+use self::tokio_core::io::{Codec, EasyBuf};
+
+pub struct LineCodec;
+
+impl Codec for LineCodec 
 {
-    if config.inner.network.use_async {
-        let (shutdown_tx, shutdown_rx) = mioco::sync::mpsc::channel();
+    type In  = String;
+    type Out = String;
 
-        let join_handle = mioco::spawn(move || -> NetResult {
-            let _ = mioco::spawn(move || {
-                let _ = shutdown_rx.recv();
-                mioco::shutdown();
-            });
+    fn decode(&mut self, buf: &mut EasyBuf) -> io::Result<Option<Self::In>>
+    {
+        if let Some(i) = buf.as_slice().iter().position(|&b| b == b'\n') {
+            let line = buf.drain_to(i);
 
-            listen::<mioco::tcp::TcpListener, Async>(config)
-        });
+            buf.drain_to(1);
 
-        simple_signal::set_handler(&[Signal::Term, Signal::Int], move |signals| {
-            info!("Recieved signal {:?}, stopping...", signals);
-            shutdown_tx.send(()).unwrap();
-        });
-
-        match join_handle.join() {
-            Ok(inner_result) => {
-                match inner_result {
-                    Ok(_)    => info!("Terminated successfully"),
-                    Err(err) => error!("Error occured: {}", err),
-                };
-            },
-            Err(_) => info!("Stopped by signal"),
+            match str::from_utf8(line.as_slice()) {
+                Ok(s) => Ok(Some(s.to_string())),
+                Err(_) => Err(io::Error::new(io::ErrorKind::Other,
+                                             "invalid UTF-8")),
+            }
+        } else {
+            Ok(None)
         }
-    } else {
-        let _ = listen::<std::net::TcpListener, Blocking>(config);
+    }
+
+    fn encode(&mut self, msg: String, buf: &mut Vec<u8>) -> io::Result<()>
+    {
+        buf.extend(msg.as_bytes());
+        buf.push(b'\n');
+        Ok(())
     }
 }
 
-fn listen<L, S>(config: Config) -> NetResult
-    where L: Listen,
-          S: Spawn<NetResult>
+pub fn run()
 {
-    let listener = L::bind(&config.inner.network.listen_address)?;
-    let protocol = IrcProtocol::<L::Stream>::new(config);
+    let mut core = Core::new().expect("Can't create reactor, shouldn't happen!");
+    let handle = core.handle();
 
-    loop {
-        let input_socket  = listener.accept()?;
-        let output_socket = input_socket.try_clone()?;
+    let _ = core.run(main(&handle));
+}
 
-        let handle        = protocol.new_connection(output_socket);
+fn main(handle: & Handle) -> impl Future<Item=(), Error=()>
+{
+    let quit_signal   = quit_signal(handle).into_future().map(|_| {}).map_err(|_| {});
+    let tcp_listeners = setup_listeners(handle);
 
-        S::spawn(move || -> NetResult {
-            handle.consume(input_socket)?;
+    quit_signal.select(tcp_listeners).then(|_| Ok(()))
+}
 
+fn reload_signal(handle: &Handle) -> impl Stream
+{
+    let hup: Signal = Signal::new(SIGHUP, handle).wait().expect("Can't setup signal listener");
+    hup.map(|_| info!("Received SIGHUP."))
+}
+
+fn quit_signal(handle: &Handle) -> impl Stream
+{
+    let int  = Signal::new(SIGINT, handle).wait()
+        .expect("Can't setup signal listener")
+        .map(|_| info!("Received SIGINT."));
+
+    let term = Signal::new(SIGTERM, handle).wait()
+        .expect("Can't setup signal listener")
+        .map(|_| info!("Received SIGTERM."));
+
+    int.merge(term)
+}
+
+fn setup_listeners(handle: &Handle) -> impl Future<Item=(), Error=()>
+{
+    let listener      = tcp_listener(handle);
+    let reload_signal = reload_signal(handle)
+        .for_each(|_| {
             Ok(())
-        });
-    }
+        })
+        .then(|_| Ok(()));
+
+    listener.select(reload_signal)
+        .then(|_| Ok(()))
 }
 
-#[cfg(test)]
-mod test
+fn tcp_listener(handle: &Handle) -> impl Future<Item=(), Error=()>
 {
-    #[test]
-    fn raise_error_on_invalid_listen_address()
-    {
-        // TODO
-    }
-
-    #[test]
-    fn raise_error_on_fail_to_bind_address()
-    {
-        // TODO
-    }
-
-    #[test]
-    fn calls_new_connection()
-    {
-        // TODO
-    }
-
-    #[test]
-    fn calls_consume()
-    {
-        // TODO
-    }
+    let addr = SocketAddr::from_str("0.0.0.0:6667").unwrap();
+    TcpListener::bind(&addr, &handle).expect("Can't bind tcp socket")
+        .incoming()
+        .for_each(|(socket, _peer_addr)| {
+            let (writer, reader) = socket.framed(LineCodec).split();
+            let responses        = reader.and_then(|req| Ok(req));
+            writer.send_all(responses).then(|_| Ok(()))
+        })
+        .then(|_| Ok(()))
 }

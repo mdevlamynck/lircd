@@ -27,6 +27,48 @@ use std::path::{Path, PathBuf};
 use std::fs::File;
 use std::env::home_dir;
 
+use std::sync::RwLock;
+
+lazy_static! {
+    static ref CONFIG: RwLock<Config> = RwLock::new(Config::default());
+}
+
+pub fn get() -> &'static RwLock<Config>
+{
+    &CONFIG
+}
+
+pub fn load()
+{
+    let path = Config::default_path();
+    load_from(&path);
+}
+
+pub fn load_from(path: &Path)
+{
+    let mut config = get().write().unwrap();
+    let new_config = Config::load_from(path);
+    mem::replace(&mut *config, new_config);
+}
+
+pub fn reload()
+{
+    let mut config = get().write().unwrap();
+    config.reload();
+}
+
+pub fn save()
+{
+    let config = get().read().unwrap();
+    config.save();
+}
+
+pub fn create_if_doesnt_exist()
+{
+    let config = get().read().unwrap();
+    config.create_if_doesnt_exist();
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Config
 {
@@ -45,7 +87,6 @@ pub struct InnerConfig
 pub struct Network
 {
     pub listen_address: String,
-    pub use_async:      bool,
     pub hostname:       String,
     pub use_tls:        bool,
 }
@@ -71,7 +112,7 @@ impl InnerConfig
 
 impl Config
 {
-    pub fn new() -> Config
+    fn new() -> Config
     {
         Config {
             inner: InnerConfig::new(),
@@ -79,13 +120,13 @@ impl Config
         }
     }
 
-    pub fn load() -> Config
+    fn load() -> Config
     {
         let path = Config::default_path();
         Config::load_from(&path)
     }
 
-    pub fn load_from(path: &Path) -> Config
+    fn load_from(path: &Path) -> Config
     {
         let config = File::open(&path)
             .and_then(|mut file| {
@@ -103,20 +144,20 @@ impl Config
         }
     }
 
-    pub fn reload(&mut self)
+    fn reload(&mut self)
     {
         let new_config = Config::load_from(&self.path);
         mem::replace(self, new_config);
     }
 
-    pub fn save(&self)
+    fn save(&self)
     {
         File::create(&self.path)
             .and_then(|mut file| file.write_all(toml::encode_str(&self.inner).as_bytes()))
             .unwrap_or_else(|err| error!("Unable to save configuration: {}", err));
     }
 
-    pub fn create_if_doesnt_exist(&self)
+    fn create_if_doesnt_exist(&self)
     {
         if !self.path.is_file() {
             self.save();
@@ -134,11 +175,10 @@ impl Config
 
 impl Network
 {
-    pub fn new() -> Network
+    fn new() -> Network
     {
         Network {
             listen_address: "0.0.0.0:6667".to_string(),
-            use_async:      true,
             hostname:       "localhost".to_string(),
             use_tls:        false,
         }
@@ -147,7 +187,7 @@ impl Network
 
 impl Irc
 {
-    pub fn new() -> Irc
+    fn new() -> Irc
     {
         Irc {
             password: "Ch4ng3Th1sP4ssw0rd".to_string(),
@@ -222,7 +262,6 @@ mod test
         let config = super::Config::default();
 
         assert_eq!("0.0.0.0:6667", &config.inner.network.listen_address);
-        assert_eq!(true, config.inner.network.use_async);
         assert_eq!("localhost", &config.inner.network.hostname);
         assert_eq!(false, config.inner.network.use_tls);
 
@@ -247,7 +286,6 @@ mod test
                         [network]
                         hostname = "somehost"
                         listen_address = "0.0.0.0:42"
-                        use_async = false
                         use_tls = true
                     "#).as_bytes()))
                 .unwrap();
@@ -255,7 +293,6 @@ mod test
             let config = Config::load_from(&path);
 
             assert_eq!("0.0.0.0:42", &config.inner.network.listen_address);
-            assert_eq!(false, config.inner.network.use_async);
             assert_eq!("somehost", &config.inner.network.hostname);
             assert_eq!(true, config.inner.network.use_tls);
 
@@ -315,7 +352,6 @@ mod test
                     [network]
                     hostname = "localhost"
                     listen_address = "0.0.0.0:6667"
-                    use_async = true
                     use_tls = false
                 "#),
                 file_content
@@ -344,7 +380,6 @@ mod test
                         [network]
                         hostname = "somehost"
                         listen_address = "0.0.0.0:42"
-                        use_async = false
                         use_tls = true
                     "#).as_bytes()))
                 .unwrap();
@@ -352,7 +387,6 @@ mod test
             config.reload();
 
             assert_eq!("0.0.0.0:42", &config.inner.network.listen_address);
-            assert_eq!(false, config.inner.network.use_async);
             assert_eq!("somehost", &config.inner.network.hostname);
             assert_eq!(true, config.inner.network.use_tls);
 

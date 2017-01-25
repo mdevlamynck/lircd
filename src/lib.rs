@@ -26,11 +26,11 @@ extern crate rustc_serialize;
 extern crate mioco;
 extern crate simple_signal;
 extern crate unindent;
+#[macro_use]
+extern crate lazy_static;
 
 pub mod irc;
 pub mod net;
 pub mod config;
 pub mod error;
 pub mod reader;
-pub mod common_api;
-pub mod tokio;

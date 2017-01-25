@@ -32,6 +32,7 @@ tokio-proto = "*"
 tokio-service = "*"
 tokio-signal = "*"
 libc = "*"
+lazy_static = "*"
 
 [dev-dependencies]
 rand = "*"

@@ -27,7 +27,7 @@ use error::{NetResult, NetError};
 use mioco::sync::{Mutex, RwLock};
 use net::{StatefullProtocol, StatefullHandle};
 use reader::{MaxLengthedBufRead, MaxLengthedBufReader};
-use config::Config;
+use config;
 
 mod message;
 mod command;
@@ -45,14 +45,15 @@ impl<Output> StatefullProtocol<Output> for IrcProtocol<Output>
 {
     type Handle = IrcHandle<Output>;
 
-    fn new(mut config: Config) -> Self
+    fn new() -> Self
     {
         if let Ok(hostname) = resolve::hostname::get_hostname() {
+            let mut config = config::get().write().unwrap();
             config.inner.network.hostname = hostname;
         }
 
         IrcProtocol::<Output> {
-            state: Arc::new(RwLock::new(Irc::new(config))),
+            state: Arc::new(RwLock::new(Irc::new())),
         }
     }
 
@@ -108,17 +109,15 @@ impl<Output> IrcHandle<Output>
 
 pub struct Irc<Output>
 {
-    pub config:   RwLock<Config>,
     pub users:    RwLock<HashMap<String, Client<Output>>>,
     pub channels: RwLock<HashMap<String, Client<Output>>>,
 }
 
 impl<Output> Irc<Output>
 {
-    pub fn new(config: Config) -> Self
+    pub fn new() -> Self
     {
         Irc::<Output> {
-            config:   RwLock::new(config),
             users:    RwLock::new(HashMap::new()),
             channels: RwLock::new(HashMap::new()),
         }

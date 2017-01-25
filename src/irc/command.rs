@@ -22,6 +22,7 @@ use irc::message::{Message, reply as rep, error as err};
 use irc::{IrcHandle, Connection, Client};
 use error::{NetResult, NetError};
 use std::io::Write;
+use config;
 
 pub fn dispatch_command<Output>(handle: &IrcHandle<Output>, request: String) -> NetResult
     where Output: Write
@@ -143,8 +144,7 @@ fn user<Output>(handle: &IrcHandle<Output>, message: &Message) -> NetResult
             client.username = username.clone();
             client.realname = realname.clone();
 
-            let irc    = handle.state.read().unwrap();
-            let config = irc.config.read().unwrap();
+            let config = config::get().read().unwrap();
             client.write_all(format!("{r} :{m}\r\n", r=rep::WELCOME, m=&config.inner.irc.welcome).as_bytes())?;
         }
 
@@ -477,17 +477,15 @@ mod test
     use std::str;
     use irc::IrcHandle;
     use irc::Irc;
-    use config::Config;
     use super::dispatch_command;
 
     #[test]
     fn unknown_command_writes_back_unknown_command()
     {
         let mut buffer = Vec::<u8>::new();
-        let config     = Config::default();
 
         {
-            let state  = Arc::new(RwLock::new(Irc::new(config)));
+            let state  = Arc::new(RwLock::new(Irc::new()));
             let handle = IrcHandle::new(state.clone(), &mut buffer);
 
             let message    = "some_gibberish".to_string();
@@ -503,10 +501,9 @@ mod test
     fn unimplemented_command_writes_back_unknown_command_not_implemented_yet()
     {
         let mut buffer = Vec::<u8>::new();
-        let config     = Config::default();
 
         {
-            let state  = Arc::new(RwLock::new(Irc::new(config)));
+            let state  = Arc::new(RwLock::new(Irc::new()));
             let handle = IrcHandle::new(state.clone(), &mut buffer);
 
             let message    = "ISON".to_string();
@@ -522,10 +519,9 @@ mod test
     fn no_command_no_reaction()
     {
         let mut buffer = Vec::<u8>::new();
-        let config     = Config::default();
 
         {
-            let state  = Arc::new(RwLock::new(Irc::new(config)));
+            let state  = Arc::new(RwLock::new(Irc::new()));
             let handle = IrcHandle::new(state.clone(), &mut buffer);
 
             let message    = "".to_string();
