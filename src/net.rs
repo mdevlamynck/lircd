@@ -26,6 +26,7 @@ extern crate libc;
 
 use std::io::{Read, Write};
 use error::NetResult;
+use config;
 
 pub trait StatefullProtocol<Output>
     where Output: Write
@@ -105,18 +106,18 @@ fn main(handle: & Handle) -> impl Future<Item=(), Error=()>
 fn reload_signal(handle: &Handle) -> impl Stream
 {
     let hup: Signal = Signal::new(SIGHUP, handle).wait().expect("Can't setup signal listener");
-    hup.map(|_| info!("Received SIGHUP."))
+    hup.map(|_| info!("Received SIGHUP"))
 }
 
 fn quit_signal(handle: &Handle) -> impl Stream
 {
     let int  = Signal::new(SIGINT, handle).wait()
         .expect("Can't setup signal listener")
-        .map(|_| info!("Received SIGINT."));
+        .map(|_| info!("Received SIGINT"));
 
     let term = Signal::new(SIGTERM, handle).wait()
         .expect("Can't setup signal listener")
-        .map(|_| info!("Received SIGTERM."));
+        .map(|_| info!("Received SIGTERM"));
 
     int.merge(term)
 }
@@ -126,6 +127,8 @@ fn setup_listeners(handle: &Handle) -> impl Future<Item=(), Error=()>
     let listener      = tcp_listener(handle);
     let reload_signal = reload_signal(handle)
         .for_each(|_| {
+            info!("Reloading configuration");
+            config::reload();
             Ok(())
         })
         .then(|_| Ok(()));

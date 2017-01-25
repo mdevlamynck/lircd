@@ -120,12 +120,6 @@ impl Config
         }
     }
 
-    fn load() -> Config
-    {
-        let path = Config::default_path();
-        Config::load_from(&path)
-    }
-
     fn load_from(path: &Path) -> Config
     {
         let config = File::open(&path)
