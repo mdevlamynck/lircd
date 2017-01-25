@@ -18,6 +18,8 @@
 // at matthias.devlamynck@mailoo.org. The official repository for this
 // project is https://github.com/mdevlamynck/lircd.
 
+#![feature(conservative_impl_trait)]
+
 #[macro_use]
 extern crate log;
 extern crate rustc_serialize;
@@ -31,3 +33,4 @@ pub mod config;
 pub mod error;
 pub mod reader;
 pub mod common_api;
+pub mod tokio;

@@ -26,6 +26,12 @@ rustc-serialize = "*"
 simple-signal = "*"
 toml = "*"
 unindent = "*"
+futures = "*"
+tokio-core = "*"
+tokio-proto = "*"
+tokio-service = "*"
+tokio-signal = "*"
+libc = "*"
 
 [dev-dependencies]
 rand = "*"
