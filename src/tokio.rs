@@ -3,29 +3,63 @@ extern crate tokio_core;
 extern crate tokio_signal;
 extern crate libc;
 
-use self::futures::{Future, Stream};
+use self::futures::{Future, Stream, Sink};
 use self::tokio_core::reactor::{Core, Handle};
 use self::tokio_core::net::TcpListener;
+use self::tokio_core::io::Io;
 use self::tokio_signal::unix::{Signal, SIGHUP, SIGINT, SIGTERM};
-use self::libc::c_int;
 use std::str::FromStr;
 use std::net::SocketAddr;
+use std::io;
+use std::str;
+use self::tokio_core::io::{Codec, EasyBuf};
+
+pub struct LineCodec;
+
+impl Codec for LineCodec 
+{
+    type In  = String;
+    type Out = String;
+
+    fn decode(&mut self, buf: &mut EasyBuf) -> io::Result<Option<Self::In>>
+    {
+        if let Some(i) = buf.as_slice().iter().position(|&b| b == b'\n') {
+            let line = buf.drain_to(i);
+
+            buf.drain_to(1);
+
+            match str::from_utf8(line.as_slice()) {
+                Ok(s) => Ok(Some(s.to_string())),
+                Err(_) => Err(io::Error::new(io::ErrorKind::Other,
+                                             "invalid UTF-8")),
+            }
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn encode(&mut self, msg: String, buf: &mut Vec<u8>) -> io::Result<()>
+    {
+        buf.extend(msg.as_bytes());
+        buf.push(b'\n');
+        Ok(())
+    }
+}
 
 pub fn run()
 {
     let mut core = Core::new().expect("Can't create reactor, shouldn't happen!");
     let handle = core.handle();
 
-    core.run(main(&handle));
+    let _ = core.run(main(&handle));
 }
 
-fn main(handle: &Handle) -> impl Future
+fn main(handle: & Handle) -> impl Future<Item=(), Error=()>
 {
-    let quit_signal  = quit_signal(handle).into_future().map(|_| {}).map_err(|_| {});
-    let tcp_listener = tcp_listener(handle).map(|_| {}).map_err(|_| {});
+    let quit_signal   = quit_signal(handle).into_future().map(|_| {}).map_err(|_| {});
+    let tcp_listeners = setup_listeners(handle);
 
-    quit_signal.select(tcp_listener)
-    //quit_signal
+    quit_signal.select(tcp_listeners).then(|_| Ok(()))
 }
 
 fn reload_signal(handle: &Handle) -> impl Stream
@@ -36,28 +70,39 @@ fn reload_signal(handle: &Handle) -> impl Stream
 
 fn quit_signal(handle: &Handle) -> impl Stream
 {
-    let int: Signal  = Signal::new(SIGINT, handle).wait().expect("Can't setup signal listener");
-    let term: Signal = Signal::new(SIGTERM, handle).wait().expect("Can't setup signal listener");
+    let int  = Signal::new(SIGINT, handle).wait()
+        .expect("Can't setup signal listener")
+        .map(|_| info!("Received SIGINT."));
 
-    let int  = int.map(|_| info!("Received SIGINT."));
-    let term = term.map(|_| info!("Received SIGTERM."));
+    let term = Signal::new(SIGTERM, handle).wait()
+        .expect("Can't setup signal listener")
+        .map(|_| info!("Received SIGTERM."));
 
     int.merge(term)
 }
 
-fn tcp_listener(handle: &Handle) -> impl Future
+fn setup_listeners(handle: &Handle) -> impl Future<Item=(), Error=()>
 {
-    let reload_signal = reload_signal(handle).for_each(|_| {
-        Ok(())
-    }).map(|_| {}).map_err(|_| {});
-
-    let addr = SocketAddr::from_str("0.0.0.0:6667").unwrap();
-    let listener = TcpListener::bind(&addr, handle).expect("Can't bind tcp socket")
-        .incoming()
-        .for_each(|(socket, peer_addr)| {
-            Ok(()) //handle.spawn(server());
+    let listener = tcp_listener(handle);
+    let reload_signal = reload_signal(handle)
+        .for_each(|_| {
+            Ok(())
         })
-        .map(|_| {}).map_err(|_| {});
+        .then(|_| Ok(()));
 
-    reload_signal.select(listener)
+    listener.select(reload_signal)
+        .then(|_| Ok(()))
+}
+
+fn tcp_listener(handle: &Handle) -> impl Future<Item=(), Error=()>
+{
+    let addr = SocketAddr::from_str("0.0.0.0:6667").unwrap();
+    TcpListener::bind(&addr, &handle).expect("Can't bind tcp socket")
+        .incoming()
+        .for_each(|(socket, _peer_addr)| {
+            let (writer, reader) = socket.framed(LineCodec).split();
+            let responses        = reader.and_then(|req| Ok(req));
+            writer.send_all(responses).then(|_| Ok(()))
+        })
+        .then(|_| Ok(()))
 }
