@@ -1,34 +1,38 @@
 [package]
-name = "lircd"
-version = "0.0.1"
-authors = [ "Matthias Devlamynck <matthias.devlamynck@mailoo.org>" ]
-repository = "https://github.com/mdevlamynck/lircd"
-license = "AGPL-3.0+"
-readme = "README.md"
-description = "IRC  erver in Rust, just to try out the language. This has no intention of being a production project yet."
-keywords = ["irc", "server"]
+name        = "lircd"
+version     = "0.0.1"
+authors     = [ "Matthias Devlamynck <matthias.devlamynck@mailoo.org>" ]
+repository  = "https://github.com/mdevlamynck/lircd"
+license     = "AGPL-3.0+"
+readme      = "README.md"
+description = "IRC server in Rust, just to try out the language. This has no intention of being a production project yet."
+keywords    = ["irc", "server"]
 
 [lib]
 name = "lircd"
 
 [[bin]]
 name = "lircd"
-doc = false
+doc  = false
+
+[badges]
+travis-ci = { repository = "mdevlamynck/lircd", branch = "master" }
+appveyor  = { repository = "mdevlamynck/lircd", branch = "master", service = "github" }
 
 [dependencies]
-docopt = { git = "https://github.com/mdevlamynck/docopt.rs.git" }
-env_logger = "*"
-log = "*"
-memchr = "*"
-mioco = "*"
-resolve = "*"
+docopt          = { git = "https://github.com/mdevlamynck/docopt.rs.git" }
+env_logger      = "*"
+log             = "*"
+memchr          = "*"
+mioco           = "*"
+resolve         = "*"
 rustc-serialize = "*"
-simple-signal = "*"
-toml = "*"
-unindent = "*"
+simple-signal   = "*"
+toml            = "*"
+unindent        = "*"
 
 [dev-dependencies]
-rand = "*"
+rand    = "*"
 tempdir = "*"
 
 [features]
