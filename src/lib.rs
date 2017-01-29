@@ -28,6 +28,11 @@ extern crate simple_signal;
 extern crate unindent;
 #[macro_use]
 extern crate lazy_static;
+extern crate memchr;
+extern crate futures;
+extern crate tokio_core;
+extern crate tokio_signal;
+extern crate libc;
 
 pub mod irc;
 pub mod net;

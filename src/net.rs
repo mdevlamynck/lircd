@@ -18,15 +18,20 @@
 // at matthias.devlamynck@mailoo.org. The official repository for this
 // project is https://github.com/mdevlamynck/lircd.
 
-extern crate futures;
-extern crate tokio_core;
-extern crate tokio_signal;
-extern crate libc;
-
-
 use std::io::{Read, Write};
 use error::NetResult;
 use config;
+use futures::{Future, Stream, Sink, IntoFuture};
+use tokio_core::reactor::{Core, Handle};
+use tokio_core::net::TcpListener;
+use tokio_core::io::Io;
+use tokio_core::io::{Codec, EasyBuf};
+use tokio_signal::unix::{Signal, SIGHUP, SIGINT, SIGTERM};
+use std::str::FromStr;
+use std::net::SocketAddr;
+use std::io;
+use std::str;
+use memchr;
 
 pub trait StatefullProtocol<Output>
     where Output: Write
@@ -44,17 +49,6 @@ pub trait StatefullHandle<Output>
     fn consume<Input: Read>(self, input: Input) -> NetResult;
 }
 
-use self::futures::{Future, Stream, Sink};
-use self::tokio_core::reactor::{Core, Handle};
-use self::tokio_core::net::TcpListener;
-use self::tokio_core::io::Io;
-use self::tokio_signal::unix::{Signal, SIGHUP, SIGINT, SIGTERM};
-use std::str::FromStr;
-use std::net::SocketAddr;
-use std::io;
-use std::str;
-use self::tokio_core::io::{Codec, EasyBuf};
-
 pub struct LineCodec;
 
 impl Codec for LineCodec 
@@ -64,7 +58,7 @@ impl Codec for LineCodec
 
     fn decode(&mut self, buf: &mut EasyBuf) -> io::Result<Option<Self::In>>
     {
-        if let Some(i) = buf.as_slice().iter().position(|&b| b == b'\n') {
+        if let Some(i) = memchr::memchr(b'\n', buf.as_slice()) {
             let line = buf.drain_to(i);
 
             buf.drain_to(1);
@@ -89,24 +83,31 @@ impl Codec for LineCodec
 
 pub fn run()
 {
-    let mut core = Core::new().expect("Can't create reactor, shouldn't happen!");
-    let handle = core.handle();
+    let mut core = Core::new()
+        .expect("Can't create reactor, shouldn't happen!");
 
-    let _ = core.run(main(&handle));
+    let handle = core.handle();
+    let _      = core.run(main(&handle));
 }
 
-fn main(handle: & Handle) -> impl Future<Item=(), Error=()>
+fn main<'a>(handle: &'a Handle) -> impl Future<Item=(), Error=()> + 'a
 {
-    let quit_signal   = quit_signal(handle).into_future().map(|_| {}).map_err(|_| {});
     let tcp_listeners = setup_listeners(handle);
+    let quit_signal   = quit_signal(handle)
+        .into_future()
+        .then(|_| {
+            info!("Shutting down");
+            Ok(())
+        });
 
     quit_signal.select(tcp_listeners).then(|_| Ok(()))
 }
 
 fn reload_signal(handle: &Handle) -> impl Stream
 {
-    let hup: Signal = Signal::new(SIGHUP, handle).wait().expect("Can't setup signal listener");
-    hup.map(|_| info!("Received SIGHUP"))
+    Signal::new(SIGHUP, handle).wait()
+        .expect("Can't setup signal listener")
+        .map(|_| info!("Received SIGHUP"))
 }
 
 fn quit_signal(handle: &Handle) -> impl Stream
@@ -122,7 +123,7 @@ fn quit_signal(handle: &Handle) -> impl Stream
     int.merge(term)
 }
 
-fn setup_listeners(handle: &Handle) -> impl Future<Item=(), Error=()>
+fn setup_listeners<'a>(handle: &'a Handle) -> impl Future<Item=(), Error=()> + 'a
 {
     let listener      = tcp_listener(handle);
     let reload_signal = reload_signal(handle)
@@ -137,15 +138,22 @@ fn setup_listeners(handle: &Handle) -> impl Future<Item=(), Error=()>
         .then(|_| Ok(()))
 }
 
-fn tcp_listener(handle: &Handle) -> impl Future<Item=(), Error=()>
+fn tcp_listener<'a>(handle: &'a Handle) -> impl Future<Item=(), Error=()> + 'a
 {
     let addr = SocketAddr::from_str("0.0.0.0:6667").unwrap();
-    TcpListener::bind(&addr, &handle).expect("Can't bind tcp socket")
-        .incoming()
-        .for_each(|(socket, _peer_addr)| {
-            let (writer, reader) = socket.framed(LineCodec).split();
-            let responses        = reader.and_then(|req| Ok(req));
-            writer.send_all(responses).then(|_| Ok(()))
+    TcpListener::bind(&addr, &handle)
+        .into_future()
+        .and_then(move |tcp_listener| {
+            tcp_listener.incoming()
+                .for_each(move |(socket, _peer_addr)| {
+                    let (writer, reader) = socket.framed(LineCodec).split();
+                    let responses        = reader.and_then(|req| Ok(req));
+                    let server           = writer.send_all(responses).then(|_| Ok(()));
+
+                    handle.spawn(server);
+                    Ok(())
+                })
         })
+        .map_err(|_| error!("Can't bind tcp socket"))
         .then(|_| Ok(()))
 }
