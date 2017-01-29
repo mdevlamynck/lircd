@@ -130,7 +130,10 @@ impl Config
                     .ok_or_else(|| Error::new(ErrorKind::InvalidData, "Can't read configuration file"))?;
 
                 Ok(config)
-            }).unwrap_or(InnerConfig::new());
+            }).unwrap_or_else(|err| {
+                error!("Error: {}, using default values instead.", err);
+                InnerConfig::new()
+            });
 
         Config {
             inner: config,

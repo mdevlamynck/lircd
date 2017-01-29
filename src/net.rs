@@ -21,7 +21,7 @@
 use std::io::{Read, Write};
 use error::NetResult;
 use config;
-use futures::{Future, Stream, Sink, IntoFuture};
+use futures::{Future, Stream, Sink, IntoFuture, stream};
 use tokio_core::reactor::{Core, Handle};
 use tokio_core::net::TcpListener;
 use tokio_core::io::Io;
@@ -123,15 +123,36 @@ fn quit_signal(handle: &Handle) -> impl Stream
     int.merge(term)
 }
 
+//fn setup_listeners<'a>(handle: &'a Handle) -> impl Future<Item=(), Error=()> + 'a
+//{
+//    let reload_signal = reload_signal(handle)
+//        .and_then(move |_| {
+//            info!("Reloading configuration");
+//            config::reload();
+//            Ok(())
+//        })
+//        .then(|_| Ok(()));
+//
+//    stream::once::<(), ()>(Ok(())).chain(reload_signal)
+//        .for_each(move |_| {
+//            let listener = tcp_listener(handle);
+//            handle.spawn(listener);
+//            Ok(())
+//        })
+//        .then(|_| Ok(()))
+//}
+
 fn setup_listeners<'a>(handle: &'a Handle) -> impl Future<Item=(), Error=()> + 'a
 {
     let listener      = tcp_listener(handle);
     let reload_signal = reload_signal(handle)
-        .for_each(|_| {
+        .and_then(move |_| {
             info!("Reloading configuration");
             config::reload();
-            Ok(())
+            tcp_listener(handle)
+                .then(|_| Ok(()))
         })
+        .for_each(|_| Ok(()))
         .then(|_| Ok(()));
 
     listener.select(reload_signal)
@@ -140,7 +161,10 @@ fn setup_listeners<'a>(handle: &'a Handle) -> impl Future<Item=(), Error=()> + '
 
 fn tcp_listener<'a>(handle: &'a Handle) -> impl Future<Item=(), Error=()> + 'a
 {
-    let addr = SocketAddr::from_str("0.0.0.0:6667").unwrap();
+    let config = config::get().read().unwrap();
+    let addr   = SocketAddr::from_str(&config.inner.network.listen_address).unwrap();
+    info!("Listening on {}", addr);
+
     TcpListener::bind(&addr, &handle)
         .into_future()
         .and_then(move |tcp_listener| {
@@ -154,6 +178,6 @@ fn tcp_listener<'a>(handle: &'a Handle) -> impl Future<Item=(), Error=()> + 'a
                     Ok(())
                 })
         })
-        .map_err(|_| error!("Can't bind tcp socket"))
+        .map_err(|err| error!("Can't bind tcp socket : {}", err))
         .then(|_| Ok(()))
 }
