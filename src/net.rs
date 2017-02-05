@@ -21,12 +21,11 @@
 use std::io::{Read, Write};
 use error::NetResult;
 use config;
-use futures::{Future, Stream, Sink, IntoFuture, stream};
+use futures::{Future, Stream, Sink, IntoFuture};
 use tokio_core::reactor::{Core, Handle};
 use tokio_core::net::TcpListener;
 use tokio_core::io::Io;
 use tokio_core::io::{Codec, EasyBuf};
-use tokio_signal::unix::{Signal, SIGHUP, SIGINT, SIGTERM};
 use std::str::FromStr;
 use std::net::SocketAddr;
 use std::io;
@@ -92,71 +91,35 @@ pub fn run()
 
 fn main<'a>(handle: &'a Handle) -> impl Future<Item=(), Error=()> + 'a
 {
-    let tcp_listeners = setup_listeners(handle);
-    let quit_signal   = quit_signal(handle)
+    let tcp    = tcp_listener(handle);
+
+    // This lines crashes the compiler at the moment
+    //let config = config_reload(handle);
+    //quit(handle).select(tcp.join(config).map(|_| {}).map_err(|_| {}))
+
+    quit(handle).select(tcp)
+        .then(|_| Ok(()))
+}
+
+fn config_reload<'a>(handle: &'a Handle) -> impl Future<Item=(), Error=()> + 'a
+{
+    signal::reload(handle)
+        .for_each(move |_| {
+            info!("Reloading configuration");
+            config::reload();
+            Ok(())
+        })
+        .then(|_| Ok(()))
+}
+
+fn quit<'a>(handle: &'a Handle) -> impl Future<Item=(), Error=()> + 'a
+{
+    signal::quit(handle)
         .into_future()
         .then(|_| {
             info!("Shutting down");
             Ok(())
-        });
-
-    quit_signal.select(tcp_listeners).then(|_| Ok(()))
-}
-
-fn reload_signal(handle: &Handle) -> impl Stream
-{
-    Signal::new(SIGHUP, handle).wait()
-        .expect("Can't setup signal listener")
-        .map(|_| info!("Received SIGHUP"))
-}
-
-fn quit_signal(handle: &Handle) -> impl Stream
-{
-    let int  = Signal::new(SIGINT, handle).wait()
-        .expect("Can't setup signal listener")
-        .map(|_| info!("Received SIGINT"));
-
-    let term = Signal::new(SIGTERM, handle).wait()
-        .expect("Can't setup signal listener")
-        .map(|_| info!("Received SIGTERM"));
-
-    int.merge(term)
-}
-
-//fn setup_listeners<'a>(handle: &'a Handle) -> impl Future<Item=(), Error=()> + 'a
-//{
-//    let reload_signal = reload_signal(handle)
-//        .and_then(move |_| {
-//            info!("Reloading configuration");
-//            config::reload();
-//            Ok(())
-//        })
-//        .then(|_| Ok(()));
-//
-//    stream::once::<(), ()>(Ok(())).chain(reload_signal)
-//        .for_each(move |_| {
-//            let listener = tcp_listener(handle);
-//            handle.spawn(listener);
-//            Ok(())
-//        })
-//        .then(|_| Ok(()))
-//}
-
-fn setup_listeners<'a>(handle: &'a Handle) -> impl Future<Item=(), Error=()> + 'a
-{
-    let listener      = tcp_listener(handle);
-    let reload_signal = reload_signal(handle)
-        .and_then(move |_| {
-            info!("Reloading configuration");
-            config::reload();
-            tcp_listener(handle)
-                .then(|_| Ok(()))
         })
-        .for_each(|_| Ok(()))
-        .then(|_| Ok(()));
-
-    listener.select(reload_signal)
-        .then(|_| Ok(()))
 }
 
 fn tcp_listener<'a>(handle: &'a Handle) -> impl Future<Item=(), Error=()> + 'a
@@ -180,4 +143,30 @@ fn tcp_listener<'a>(handle: &'a Handle) -> impl Future<Item=(), Error=()> + 'a
         })
         .map_err(|err| error!("Can't bind tcp socket : {}", err))
         .then(|_| Ok(()))
+}
+
+mod signal {
+    use futures::{Future, Stream};
+    use tokio_core::reactor::Handle;
+    use tokio_signal::unix::{Signal, SIGHUP, SIGINT, SIGTERM};
+
+    pub fn reload(handle: &Handle) -> impl Stream
+    {
+        Signal::new(SIGHUP, handle).wait()
+            .expect("Can't setup SIGHUP signal listener")
+            .map(|_| info!("Received SIGHUP"))
+    }
+
+    pub fn quit(handle: &Handle) -> impl Stream
+    {
+        let int  = Signal::new(SIGINT, handle).wait()
+            .expect("Can't setup SIGINT signal listener")
+            .map(|_| info!("Received SIGINT"));
+
+        let term = Signal::new(SIGTERM, handle).wait()
+            .expect("Can't setup SIGTERM signal listener")
+            .map(|_| info!("Received SIGTERM"));
+
+        int.merge(term)
+    }
 }
