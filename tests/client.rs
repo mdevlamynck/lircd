@@ -39,7 +39,7 @@ mod functional
     {
         let port: u16                       = thread_rng().gen_range(6000, 6999);
         let mut config                      = config::Config::new();
-        config.inner.network.listen_address = format!("{}:{}", TEST_LISTEN_ADDR, port);
+        config.network.listen_address = format!("{}:{}", TEST_LISTEN_ADDR, port);
 
         thread::spawn(move || {
             net::run(config);

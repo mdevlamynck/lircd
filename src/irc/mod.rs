@@ -48,7 +48,7 @@ impl<Output> StatefullProtocol<Output> for IrcProtocol<Output>
     fn new(mut config: Config) -> Self
     {
         if let Ok(hostname) = resolve::hostname::get_hostname() {
-            config.inner.network.hostname = hostname;
+            config.network.hostname = hostname;
         }
 
         IrcProtocol::<Output> {

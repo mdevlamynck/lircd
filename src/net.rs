@@ -20,13 +20,12 @@
 
 extern crate mioco;
 
-use std;
 use std::io::{Read, Write};
 use simple_signal::{self, Signal};
 use irc::IrcProtocol;
 use config::Config;
 use error::NetResult;
-use common_api::{Listen, Stream, Spawn, Async, Blocking};
+use common_api::{Listen, Stream, Spawn, Async};
 
 pub trait StatefullProtocol<Output>
     where Output: Write
@@ -46,34 +45,30 @@ pub trait StatefullHandle<Output>
 
 pub fn run(config: Config)
 {
-    if config.inner.network.use_async {
-        let (shutdown_tx, shutdown_rx) = mioco::sync::mpsc::channel();
+    let (shutdown_tx, shutdown_rx) = mioco::sync::mpsc::channel();
 
-        let join_handle = mioco::spawn(move || -> NetResult {
-            let _ = mioco::spawn(move || {
-                let _ = shutdown_rx.recv();
-                mioco::shutdown();
-            });
-
-            listen::<mioco::tcp::TcpListener, Async>(config)
+    let join_handle = mioco::spawn(move || -> NetResult {
+        let _ = mioco::spawn(move || {
+            let _ = shutdown_rx.recv();
+            mioco::shutdown();
         });
 
-        simple_signal::set_handler(&[Signal::Term, Signal::Int], move |signals| {
-            info!("Recieved signal {:?}, stopping...", signals);
-            shutdown_tx.send(()).unwrap();
-        });
+        listen::<mioco::tcp::TcpListener, Async>(config)
+    });
 
-        match join_handle.join() {
-            Ok(inner_result) => {
-                match inner_result {
-                    Ok(_)    => info!("Terminated successfully"),
-                    Err(err) => error!("Error occured: {}", err),
-                };
-            },
-            Err(_) => info!("Stopped by signal"),
-        }
-    } else {
-        let _ = listen::<std::net::TcpListener, Blocking>(config);
+    simple_signal::set_handler(&[Signal::Term, Signal::Int], move |signals| {
+        info!("Recieved signal {:?}, stopping...", signals);
+        shutdown_tx.send(()).unwrap();
+    });
+
+    match join_handle.join() {
+        Ok(inner_result) => {
+            match inner_result {
+                Ok(_)    => info!("Terminated successfully"),
+                Err(err) => error!("Error occured: {}", err),
+            };
+        },
+        Err(_) => info!("Stopped by signal"),
     }
 }
 
@@ -81,7 +76,7 @@ fn listen<L, S>(config: Config) -> NetResult
     where L: Listen,
           S: Spawn<NetResult>
 {
-    let listener = L::bind(&config.inner.network.listen_address)?;
+    let listener = L::bind(&config.network.listen_address)?;
     let protocol = IrcProtocol::<L::Stream>::new(config);
 
     loop {

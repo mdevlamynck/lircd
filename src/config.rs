@@ -27,30 +27,27 @@ use std::path::{Path, PathBuf};
 use std::fs::File;
 use std::env::home_dir;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Config
-{
-    pub inner: InnerConfig,
-    pub path:  PathBuf,
-}
-
-#[derive(Debug, Clone, PartialEq, RustcEncodable, RustcDecodable)]
-pub struct InnerConfig
 {
     pub network: Network,
     pub irc:     Irc,
+
+    #[serde(skip_serializing)]
+    #[serde(skip_deserializing)]
+    #[serde(default = "Config::default_path")]
+    pub path:    PathBuf,
 }
 
-#[derive(Debug, Clone, PartialEq, RustcEncodable, RustcDecodable)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Network
 {
     pub listen_address: String,
-    pub use_async:      bool,
     pub hostname:       String,
     pub use_tls:        bool,
 }
 
-#[derive(Debug, Clone, PartialEq, RustcEncodable, RustcDecodable)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Irc
 {
     pub password:       String,
@@ -58,24 +55,14 @@ pub struct Irc
     pub welcome:        String,
 }
 
-impl InnerConfig
-{
-    pub fn new() -> InnerConfig
-    {
-        InnerConfig {
-            network: Network::new(),
-            irc:     Irc::new(),
-        }
-    }
-}
-
 impl Config
 {
     pub fn new() -> Config
     {
         Config {
-            inner: InnerConfig::new(),
-            path:  Config::default_path()
+            network: Network::new(),
+            irc:     Irc::new(),
+            path:    Config::default_path()
         }
     }
 
@@ -87,20 +74,22 @@ impl Config
 
     pub fn load_from(path: &Path) -> Config
     {
-        let config = File::open(&path)
+        let mut config = File::open(&path)
             .and_then(|mut file| {
                 let mut file_content = String::new();
                 let _                = file.read_to_string(&mut file_content)?;
-                let config           = toml::decode_str(&file_content)
-                    .ok_or_else(|| Error::new(ErrorKind::InvalidData, "Can't read configuration file"))?;
+                let config           = toml::from_str(&file_content)
+                    .or_else(|err| {
+                        error!("Can't read configuration file: {}", err);
+                        Err(Error::new(ErrorKind::InvalidData, "Can't read configuration file"))
+                    })?;
 
                 Ok(config)
-            }).unwrap_or(InnerConfig::new());
+            }).unwrap_or(Config::new());
 
-        Config {
-            inner: config,
-            path:  path.to_path_buf(),
-        }
+        config.path = path.to_path_buf();
+
+        config
     }
 
     pub fn reload(&mut self)
@@ -112,7 +101,11 @@ impl Config
     pub fn save(&self)
     {
         File::create(&self.path)
-            .and_then(|mut file| file.write_all(toml::encode_str(&self.inner).as_bytes()))
+            .and_then(|mut file| {
+                toml::to_string(&self)
+                    .map_err(|err| Error::new(ErrorKind::InvalidData, format!("Can't serialize configuration: {}", err)))
+                    .and_then(move |toml| file.write_all(toml.as_bytes()))
+            })
             .unwrap_or_else(|err| error!("Unable to save configuration: {}", err));
     }
 
@@ -138,7 +131,6 @@ impl Network
     {
         Network {
             listen_address: "0.0.0.0:6667".to_string(),
-            use_async:      true,
             hostname:       "localhost".to_string(),
             use_tls:        false,
         }
@@ -221,14 +213,13 @@ mod test
     {
         let config = super::Config::default();
 
-        assert_eq!("0.0.0.0:6667", &config.inner.network.listen_address);
-        assert_eq!(true, config.inner.network.use_async);
-        assert_eq!("localhost", &config.inner.network.hostname);
-        assert_eq!(false, config.inner.network.use_tls);
+        assert_eq!("0.0.0.0:6667", &config.network.listen_address);
+        assert_eq!("localhost", &config.network.hostname);
+        assert_eq!(false, config.network.use_tls);
 
-        assert_eq!("Ch4ng3Th1sP4ssw0rd", &config.inner.irc.password);
-        assert_eq!(240, config.inner.irc.timeout);
-        assert_eq!("Welcome to lircd", &config.inner.irc.welcome);
+        assert_eq!("Ch4ng3Th1sP4ssw0rd", &config.irc.password);
+        assert_eq!(240, config.irc.timeout);
+        assert_eq!("Welcome to lircd", &config.irc.welcome);
     }
 
     #[test]
@@ -239,29 +230,27 @@ mod test
 
             File::create(&path)
                 .and_then(|mut f| f.write_all(&unindent(r#"
+                        [network]
+                        listen_address = "0.0.0.0:42"
+                        hostname = "somehost"
+                        use_tls = true
+
                         [irc]
                         password = "somepassword"
                         timeout = 42
                         welcome = "some welcome"
-
-                        [network]
-                        hostname = "somehost"
-                        listen_address = "0.0.0.0:42"
-                        use_async = false
-                        use_tls = true
                     "#).as_bytes()))
                 .unwrap();
 
             let config = Config::load_from(&path);
 
-            assert_eq!("0.0.0.0:42", &config.inner.network.listen_address);
-            assert_eq!(false, config.inner.network.use_async);
-            assert_eq!("somehost", &config.inner.network.hostname);
-            assert_eq!(true, config.inner.network.use_tls);
+            assert_eq!("0.0.0.0:42", &config.network.listen_address);
+            assert_eq!("somehost", &config.network.hostname);
+            assert_eq!(true, config.network.use_tls);
 
-            assert_eq!("somepassword", &config.inner.irc.password);
-            assert_eq!(42, config.inner.irc.timeout);
-            assert_eq!("some welcome", &config.inner.irc.welcome);
+            assert_eq!("somepassword", &config.irc.password);
+            assert_eq!(42, config.irc.timeout);
+            assert_eq!("some welcome", &config.irc.welcome);
 
             assert_eq!(path, config.path);
         });
@@ -307,16 +296,15 @@ mod test
             let _                = file.read_to_string(&mut file_content).unwrap();
 
             assert_eq!(unindent(r#"
+                    [network]
+                    listen_address = "0.0.0.0:6667"
+                    hostname = "localhost"
+                    use_tls = false
+
                     [irc]
                     password = "Ch4ng3Th1sP4ssw0rd"
                     timeout = 240
                     welcome = "Welcome to lircd"
-
-                    [network]
-                    hostname = "localhost"
-                    listen_address = "0.0.0.0:6667"
-                    use_async = true
-                    use_tls = false
                 "#),
                 file_content
             );
@@ -336,29 +324,27 @@ mod test
 
             File::create(&path)
                 .and_then(|mut f| f.write_all(&unindent(r#"
+                        [network]
+                        listen_address = "0.0.0.0:42"
+                        hostname = "somehost"
+                        use_tls = true
+
                         [irc]
                         password = "somepassword"
                         timeout = 42
                         welcome = "some welcome"
-
-                        [network]
-                        hostname = "somehost"
-                        listen_address = "0.0.0.0:42"
-                        use_async = false
-                        use_tls = true
                     "#).as_bytes()))
                 .unwrap();
 
             config.reload();
 
-            assert_eq!("0.0.0.0:42", &config.inner.network.listen_address);
-            assert_eq!(false, config.inner.network.use_async);
-            assert_eq!("somehost", &config.inner.network.hostname);
-            assert_eq!(true, config.inner.network.use_tls);
+            assert_eq!("0.0.0.0:42", &config.network.listen_address);
+            assert_eq!("somehost", &config.network.hostname);
+            assert_eq!(true, config.network.use_tls);
 
-            assert_eq!("somepassword", &config.inner.irc.password);
-            assert_eq!(42, config.inner.irc.timeout);
-            assert_eq!("some welcome", &config.inner.irc.welcome);
+            assert_eq!("somepassword", &config.irc.password);
+            assert_eq!(42, config.irc.timeout);
+            assert_eq!("some welcome", &config.irc.welcome);
 
             assert_eq!(path, config.path);
         });

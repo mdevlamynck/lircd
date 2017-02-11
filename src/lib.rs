@@ -20,7 +20,8 @@
 
 #[macro_use]
 extern crate log;
-extern crate rustc_serialize;
+#[macro_use]
+extern crate serde_derive;
 extern crate mioco;
 extern crate simple_signal;
 extern crate unindent;
