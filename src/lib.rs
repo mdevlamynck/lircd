@@ -22,7 +22,8 @@
 
 #[macro_use]
 extern crate log;
-extern crate rustc_serialize;
+#[macro_use]
+extern crate serde_derive;
 extern crate mioco;
 extern crate simple_signal;
 extern crate unindent;
@@ -31,7 +32,9 @@ extern crate lazy_static;
 extern crate memchr;
 extern crate futures;
 extern crate tokio_core;
+extern crate tokio_io;
 extern crate tokio_signal;
+extern crate bytes;
 extern crate libc;
 
 pub mod irc;

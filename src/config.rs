@@ -76,14 +76,14 @@ pub struct Config
     pub path:  PathBuf,
 }
 
-#[derive(Debug, Clone, PartialEq, RustcEncodable, RustcDecodable)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct InnerConfig
 {
     pub network: Network,
     pub irc:     Irc,
 }
 
-#[derive(Debug, Clone, PartialEq, RustcEncodable, RustcDecodable)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Network
 {
     pub listen_address: String,
@@ -91,7 +91,7 @@ pub struct Network
     pub use_tls:        bool,
 }
 
-#[derive(Debug, Clone, PartialEq, RustcEncodable, RustcDecodable)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Irc
 {
     pub password:       String,
@@ -126,8 +126,11 @@ impl Config
             .and_then(|mut file| {
                 let mut file_content = String::new();
                 let _                = file.read_to_string(&mut file_content)?;
-                let config           = toml::decode_str(&file_content)
-                    .ok_or_else(|| Error::new(ErrorKind::InvalidData, "Can't read configuration file"))?;
+                let config           = toml::from_str(&file_content)
+                    .or_else(|err| {
+                        error!("Can't read configuration file: {}", err);
+                        Err(Error::new(ErrorKind::InvalidData, "Can't read configuration file"))
+                    })?;
 
                 Ok(config)
             }).unwrap_or_else(|err| {
@@ -150,7 +153,11 @@ impl Config
     fn save(&self)
     {
         File::create(&self.path)
-            .and_then(|mut file| file.write_all(toml::encode_str(&self.inner).as_bytes()))
+            .and_then(|mut file| {
+                toml::to_string(&self.inner)
+                    .map_err(|err| Error::new(ErrorKind::InvalidData, format!("Can't serialize configuration: {}", err)))
+                    .and_then(move |toml| file.write_all(toml.as_bytes()))
+            })
             .unwrap_or_else(|err| error!("Unable to save configuration: {}", err));
     }
 

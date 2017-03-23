@@ -16,18 +16,21 @@ name = "lircd"
 doc = false
 
 [dependencies]
+bytes = "*"
 docopt = { git = "https://github.com/mdevlamynck/docopt.rs.git" }
 env_logger = "*"
 log = "*"
 memchr = "*"
 mioco = "*"
 resolve = "*"
-rustc-serialize = "*"
+serde = "*"
+serde_derive = "*"
 simple-signal = "*"
 toml = "*"
 unindent = "*"
 futures = "*"
 tokio-core = "*"
+tokio-io = "*"
 tokio-proto = "*"
 tokio-service = "*"
 tokio-signal = "*"

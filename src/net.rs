@@ -24,12 +24,14 @@ use config;
 use futures::{Future, Stream, Sink, IntoFuture};
 use tokio_core::reactor::{Core, Handle};
 use tokio_core::net::TcpListener;
-use tokio_core::io::Io;
-use tokio_core::io::{Codec, EasyBuf};
+use bytes::{BytesMut, BufMut};
+use tokio_io::AsyncRead;
+use tokio_io::codec::{Encoder, Decoder};
 use std::str::FromStr;
 use std::net::SocketAddr;
 use std::io;
 use std::str;
+use std::cmp::min;
 use memchr;
 
 pub trait StatefullProtocol<Output>
@@ -48,34 +50,53 @@ pub trait StatefullHandle<Output>
     fn consume<Input: Read>(self, input: Input) -> NetResult;
 }
 
+const MAX_LINE_LENGTH: usize = 512 * 4;
+
 pub struct LineCodec;
 
-impl Codec for LineCodec 
+impl Decoder for LineCodec
 {
-    type In  = String;
-    type Out = String;
+    type Item  = String;
+    type Error = io::Error;
 
-    fn decode(&mut self, buf: &mut EasyBuf) -> io::Result<Option<Self::In>>
+    fn decode(&mut self, buf: &mut BytesMut) -> io::Result<Option<Self::Item>>
     {
-        if let Some(i) = memchr::memchr(b'\n', buf.as_slice()) {
-            let line = buf.drain_to(i);
+        let make_string = |buf: &mut BytesMut, i: usize| -> io::Result<Option<Self::Item>> {
+            let line = buf.split_to(i);
 
-            buf.drain_to(1);
+            buf.split_to(1);
 
-            match str::from_utf8(line.as_slice()) {
+            match str::from_utf8(&line) {
                 Ok(s) => Ok(Some(s.to_string())),
                 Err(_) => Err(io::Error::new(io::ErrorKind::Other,
                                              "invalid UTF-8")),
             }
-        } else {
+        };
+
+        let drop_input = |buf: &mut BytesMut, i: usize| -> io::Result<Option<Self::Item>> {
+            buf.split_to(i);
             Ok(None)
+        };
+
+        let len = buf.len();
+
+        match memchr::memchr(b'\n', &buf) {
+            Some(i) if i < MAX_LINE_LENGTH => make_string(buf, i),
+            Some(i)                        => drop_input(buf, i),
+            _                              => drop_input(buf, min(len, MAX_LINE_LENGTH)),
         }
     }
+}
 
-    fn encode(&mut self, msg: String, buf: &mut Vec<u8>) -> io::Result<()>
+impl Encoder for LineCodec
+{
+    type Item  = String;
+    type Error = io::Error;
+
+    fn encode(&mut self, msg: String, buf: &mut BytesMut) -> io::Result<()>
     {
         buf.extend(msg.as_bytes());
-        buf.push(b'\n');
+        buf.extend([b'\n'].iter());
         Ok(())
     }
 }
