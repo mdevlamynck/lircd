@@ -22,9 +22,9 @@ use std::str::FromStr;
 
 pub struct Message
 {
-    pub prefix:    Option<String>, // servername the message originates from
+    pub prefix:    Option<String>, // server's name the message originated from
     pub command:   String,         // command
-    pub arguments: Vec<String>,    // iterator over arguments
+    pub arguments: Vec<String>,    // arguments
 }
 
 #[allow(dead_code)]

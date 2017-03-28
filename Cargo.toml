@@ -1,44 +1,42 @@
 [package]
-name = "lircd"
-version = "0.0.1"
-authors = [ "Matthias Devlamynck <matthias.devlamynck@mailoo.org>" ]
-repository = "https://github.com/mdevlamynck/lircd"
-license = "AGPL-3.0+"
-readme = "README.md"
+name        = "lircd"
+version     = "0.0.1"
+authors     = [ "Matthias Devlamynck <matthias.devlamynck@mailoo.org>" ]
+repository  = "https://github.com/mdevlamynck/lircd"
+license     = "AGPL-3.0+"
+readme      = "README.md"
 description = "IRC  erver in Rust, just to try out the language. This has no intention of being a production project yet."
-keywords = ["irc", "server"]
+keywords    = ["irc", "server"]
 
 [lib]
 name = "lircd"
 
 [[bin]]
 name = "lircd"
-doc = false
+doc  = false
 
 [dependencies]
-bytes = "*"
-docopt = { git = "https://github.com/mdevlamynck/docopt.rs.git" }
-env_logger = "*"
-log = "*"
-memchr = "*"
-mioco = "*"
-resolve = "*"
-serde = "*"
-serde_derive = "*"
-simple-signal = "*"
-toml = "*"
-indoc = "*"
-futures = "*"
-tokio-core = "*"
-tokio-io = "*"
-tokio-proto = "*"
+bytes         = "*"
+docopt        = { git = "https://github.com/mdevlamynck/docopt.rs.git" }
+env_logger    = "*"
+log           = "*"
+memchr        = "*"
+resolve       = "*"
+serde         = "*"
+serde_derive  = "*"
+toml          = "*"
+indoc         = "*"
+futures       = "*"
+tokio-core    = "*"
+tokio-io      = "*"
+tokio-proto   = "*"
 tokio-service = "*"
-tokio-signal = "*"
-libc = "*"
-lazy_static = "*"
+tokio-signal  = "*"
+libc          = "*"
+lazy_static   = "*"
 
 [dev-dependencies]
-rand = "*"
+rand    = "*"
 tempdir = "*"
 
 [features]

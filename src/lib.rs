@@ -24,8 +24,6 @@
 extern crate log;
 #[macro_use]
 extern crate serde_derive;
-extern crate mioco;
-extern crate simple_signal;
 #[macro_use]
 extern crate lazy_static;
 extern crate memchr;
@@ -40,4 +38,3 @@ pub mod irc;
 pub mod net;
 pub mod config;
 pub mod error;
-pub mod reader;

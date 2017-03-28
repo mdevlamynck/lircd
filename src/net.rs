@@ -24,7 +24,7 @@ use config;
 use futures::{Future, Stream, Sink, IntoFuture};
 use tokio_core::reactor::{Core, Handle};
 use tokio_core::net::TcpListener;
-use bytes::{BytesMut, BufMut};
+use bytes::{BytesMut};
 use tokio_io::AsyncRead;
 use tokio_io::codec::{Encoder, Decoder};
 use std::str::FromStr;

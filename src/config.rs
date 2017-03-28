@@ -69,12 +69,12 @@ pub fn create_if_doesnt_exist()
     config.create_if_doesnt_exist();
 }
 
-pub fn create_or_load_from_path(path: String)
+pub fn create_or_load_from_path(path: &str)
 {
     if !path.is_empty() {
-        config::load_from(Path::new(&path))
+        load_from(Path::new(&path))
     } else {
-        config::load()
+        load()
     };
 }
 

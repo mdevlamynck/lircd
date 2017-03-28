@@ -26,7 +26,6 @@ extern crate env_logger;
 #[macro_use]
 extern crate docopt;
 
-use std::path::Path;
 use docopt::Docopt;
 use lircd::config;
 use lircd::net;
