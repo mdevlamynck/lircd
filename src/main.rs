@@ -33,8 +33,7 @@ use lircd::net;
 
 fn main() {
     env_logger::init().unwrap_or_else(|e| {
-        println!("ERROR: unable to init log");
-        println!("ERROR: original error: {}", e);
+        println!("ERROR: unable to init log: {}", e);
     });
 
     let args = docopt!(indoc!("
@@ -46,14 +45,7 @@ fn main() {
             -v, --version      Print version information and quit
     "));
 
-    let path = args.get_str("--config");
-    if !path.is_empty() {
-        config::load_from(Path::new(&path))
-    } else {
-        config::load()
-    };
-
-    config::create_if_doesnt_exist();
+    config::create_or_load_from_path(args.get_str("--config"));
 
     net::run();
 }
