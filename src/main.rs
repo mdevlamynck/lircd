@@ -18,20 +18,26 @@
 // at matthias.devlamynck@mailoo.org. The official repository for this
 // project is https://github.com/mdevlamynck/lircd.
 
+#![feature(plugin)]
+#![plugin(indoc)]
+
 extern crate lircd;
 extern crate env_logger;
 #[macro_use]
 extern crate docopt;
-extern crate unindent;
 
 use std::path::Path;
 use docopt::Docopt;
 use lircd::config;
 use lircd::net;
-use unindent::unindent;
 
 fn main() {
-    let args = docopt!(unindent("
+    env_logger::init().unwrap_or_else(|e| {
+        println!("ERROR: unable to init log");
+        println!("ERROR: original error: {}", e);
+    });
+
+    let args = docopt!(indoc!("
         Usage: lircd [options]
 
         Options:
@@ -39,11 +45,6 @@ fn main() {
             -h, --help         Print help and quit
             -v, --version      Print version information and quit
     "));
-
-    env_logger::init().unwrap_or_else(|e| {
-        println!("ERROR: unable to init log");
-        println!("ERROR: original error: {}", e);
-    });
 
     let path = args.get_str("--config");
     if !path.is_empty() {

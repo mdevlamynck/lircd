@@ -26,7 +26,6 @@ extern crate log;
 extern crate serde_derive;
 extern crate mioco;
 extern crate simple_signal;
-extern crate unindent;
 #[macro_use]
 extern crate lazy_static;
 extern crate memchr;
