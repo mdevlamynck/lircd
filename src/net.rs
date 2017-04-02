@@ -18,13 +18,12 @@
 // at matthias.devlamynck@mailoo.org. The official repository for this
 // project is https://github.com/mdevlamynck/lircd.
 
-use std::io::{Read, Write};
-use error::NetResult;
+use irc::message::Message;
 use config;
 use futures::{Future, Stream, Sink, IntoFuture};
 use tokio_core::reactor::{Core, Handle};
 use tokio_core::net::TcpListener;
-use bytes::{BytesMut};
+use bytes::BytesMut;
 use tokio_io::AsyncRead;
 use tokio_io::codec::{Encoder, Decoder};
 use std::str::FromStr;
@@ -34,42 +33,28 @@ use std::str;
 use std::cmp::min;
 use memchr;
 
-pub trait StatefullProtocol<Output>
-    where Output: Write
-{
-    type Handle: StatefullHandle<Output>;
-
-    fn new() -> Self;
-
-    fn new_connection(&self, output: Output) -> Self::Handle;
-}
-
-pub trait StatefullHandle<Output>
-    where Output: Write
-{
-    fn consume<Input: Read>(self, input: Input) -> NetResult;
-}
-
 const MAX_LINE_LENGTH: usize = 512 * 4;
 
-pub struct LineCodec;
+pub struct IrcCodec;
 
-impl Decoder for LineCodec
+impl Decoder for IrcCodec
 {
-    type Item  = String;
+    type Item  = Message;
     type Error = io::Error;
 
     fn decode(&mut self, buf: &mut BytesMut) -> io::Result<Option<Self::Item>>
     {
-        let make_string = |buf: &mut BytesMut, i: usize| -> io::Result<Option<Self::Item>> {
+        let make_message = |buf: &mut BytesMut, i: usize| -> io::Result<Option<Self::Item>> {
             let line = buf.split_to(i);
 
             buf.split_to(1);
 
             match str::from_utf8(&line) {
-                Ok(s) => Ok(Some(s.to_string())),
-                Err(_) => Err(io::Error::new(io::ErrorKind::Other,
-                                             "invalid UTF-8")),
+                Ok(s)  => Message::from_str(s)
+                    .and_then(|message| Ok(Some(message)))
+                    .or(Err(io::Error::new(io::ErrorKind::InvalidData, "invalid message"))),
+
+                Err(_) => Err(io::Error::new(io::ErrorKind::InvalidData, "invalid UTF-8")),
             }
         };
 
@@ -81,22 +66,32 @@ impl Decoder for LineCodec
         let len = buf.len();
 
         match memchr::memchr(b'\n', &buf) {
-            Some(i) if i < MAX_LINE_LENGTH => make_string(buf, i),
+            Some(i) if i < MAX_LINE_LENGTH => make_message(buf, i),
             Some(i)                        => drop_input(buf, i),
             _                              => drop_input(buf, min(len, MAX_LINE_LENGTH)),
         }
     }
 }
 
-impl Encoder for LineCodec
+impl Encoder for IrcCodec
 {
-    type Item  = String;
+    type Item  = Message;
     type Error = io::Error;
 
-    fn encode(&mut self, msg: String, buf: &mut BytesMut) -> io::Result<()>
+    fn encode(&mut self, msg: Message, buf: &mut BytesMut) -> io::Result<()>
     {
-        buf.extend(msg.as_bytes());
+        if let Some(prefix) = msg.prefix {
+            buf.extend(prefix.as_bytes());
+        }
+
+        buf.extend(msg.command.as_bytes());
+
+        for argument in msg.arguments {
+            buf.extend(argument.as_bytes());
+        }
+
         buf.extend([b'\n'].iter());
+
         Ok(())
     }
 }
@@ -154,7 +149,7 @@ fn tcp_listener<'a>(handle: &'a Handle) -> impl Future<Item=(), Error=()> + 'a
         .and_then(move |tcp_listener| {
             tcp_listener.incoming()
                 .for_each(move |(socket, _peer_addr)| {
-                    let (writer, reader) = socket.framed(LineCodec).split();
+                    let (writer, reader) = socket.framed(IrcCodec).split();
                     let responses        = reader.and_then(|req| Ok(req));
                     let server           = writer.send_all(responses).then(|_| Ok(()));
 
