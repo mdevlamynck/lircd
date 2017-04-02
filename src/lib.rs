@@ -19,6 +19,12 @@
 // project is https://github.com/mdevlamynck/lircd.
 
 #![feature(conservative_impl_trait)]
+#![feature(plugin)]
+#![plugin(indoc)]
+
+#[cfg(test)]
+#[macro_use]
+extern crate pretty_assertions;
 
 #[macro_use]
 extern crate log;

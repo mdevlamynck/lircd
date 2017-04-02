@@ -237,9 +237,9 @@ impl Default for Irc
 #[cfg(test)]
 mod test
 {
+
     extern crate tempdir;
 
-    use unindent::unindent;
     use std::fs::File;
     use std::path::Path;
     use std::io::{Read, Write};
@@ -290,7 +290,7 @@ mod test
             let path = tmp_dir.join("config.toml");
 
             File::create(&path)
-                .and_then(|mut f| f.write_all(&unindent(r#"
+                .and_then(|mut f| f.write_all(&indoc!(r#"
                         [irc]
                         password = "somepassword"
                         timeout = 42
@@ -324,7 +324,7 @@ mod test
             let path = tmp_dir.join("config.toml");
 
             File::create(&path)
-                .and_then(|mut f| f.write_all(&unindent(r#"
+                .and_then(|mut f| f.write_all(&indoc!(r#"
                         [invalid]
                         invalid = "invalid"
                     "#).as_bytes()))
@@ -356,16 +356,16 @@ mod test
             let mut file_content = String::new();
             let _                = file.read_to_string(&mut file_content).unwrap();
 
-            assert_eq!(unindent(r#"
+            assert_eq!(indoc!(r#"
+                    [network]
+                    listen_address = "0.0.0.0:6667"
+                    hostname = "localhost"
+                    use_tls = false
+
                     [irc]
                     password = "Ch4ng3Th1sP4ssw0rd"
                     timeout = 240
                     welcome = "Welcome to lircd"
-
-                    [network]
-                    hostname = "localhost"
-                    listen_address = "0.0.0.0:6667"
-                    use_tls = false
                 "#),
                 file_content
             );
@@ -384,7 +384,7 @@ mod test
             assert_eq!(expected, config);
 
             File::create(&path)
-                .and_then(|mut f| f.write_all(&unindent(r#"
+                .and_then(|mut f| f.write_all(&indoc!(r#"
                         [irc]
                         password = "somepassword"
                         timeout = 42

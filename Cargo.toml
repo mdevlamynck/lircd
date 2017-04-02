@@ -36,8 +36,9 @@ libc          = "*"
 lazy_static   = "*"
 
 [dev-dependencies]
-rand    = "*"
-tempdir = "*"
+rand              = "*"
+tempdir           = "*"
+pretty_assertions = "*"
 
 [features]
 unstable = []
