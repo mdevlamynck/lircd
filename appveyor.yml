@@ -1,4 +1,4 @@
-# Appveyor configuration template for Rust using rustup for Rust installation
+# Appveyor configurx_lenation template for Rust using rustup for Rust installation
 # https://github.com/starkat99/appveyor-rust
 
 os: Visual Studio 2015
@@ -41,9 +41,9 @@ environment:
     - channel: nightly
       target: i686-pc-windows-gnu
 
-matrix:
-  allow_failures: ~
-    # - channel: nightly
+# matrix:
+#   allow_failures:
+#     - channel: nightly
 
 install:
   - appveyor DownloadFile https://win.rustup.rs/ -FileName rustup-init.exe
