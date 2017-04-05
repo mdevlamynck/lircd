@@ -8,6 +8,10 @@ publish = false
 [package.metadata]
 cargo-fuzz = true
 
+[dependencies]
+bytes = "*"
+tokio-io = "*"
+
 [dependencies.lircd]
 path = ".."
 [dependencies.libfuzzer-sys]
