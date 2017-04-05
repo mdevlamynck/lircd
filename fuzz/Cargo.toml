@@ -22,5 +22,5 @@ git = "https://github.com/rust-fuzz/libfuzzer-sys.git"
 members = ["."]
 
 [[bin]]
-name = "fuzzer_script_1"
-path = "fuzzers/fuzzer_script_1.rs"
+name = "irc_codec_decode"
+path = "fuzzers/irc_codec_decode.rs"

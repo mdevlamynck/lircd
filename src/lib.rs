@@ -36,6 +36,7 @@ extern crate memchr;
 extern crate futures;
 extern crate tokio_core;
 extern crate tokio_io;
+#[cfg(unix)]
 extern crate tokio_signal;
 extern crate bytes;
 extern crate libc;

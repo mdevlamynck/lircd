@@ -35,7 +35,10 @@ use memchr;
 
 const MAX_LINE_LENGTH: usize = 512 * 4;
 
-pub struct IrcCodec;
+pub struct IrcCodec
+{
+    pub max_line_length: usize,
+}
 
 impl Decoder for IrcCodec
 {
@@ -66,9 +69,9 @@ impl Decoder for IrcCodec
         let len = buf.len();
 
         match memchr::memchr(b'\n', &buf) {
-            Some(i) if i < MAX_LINE_LENGTH => make_message(buf, i),
+            Some(i) if i < self.max_line_length => make_message(buf, i),
             Some(i)                        => drop_input(buf, i),
-            _                              => drop_input(buf, min(len, MAX_LINE_LENGTH)),
+            _                              => drop_input(buf, min(len, self.max_line_length)),
         }
     }
 }
@@ -149,7 +152,7 @@ fn tcp_listener<'a>(handle: &'a Handle) -> impl Future<Item=(), Error=()> + 'a
         .and_then(move |tcp_listener| {
             tcp_listener.incoming()
                 .for_each(move |(socket, _peer_addr)| {
-                    let (writer, reader) = socket.framed(IrcCodec).split();
+                    let (writer, reader) = socket.framed(IrcCodec{ max_line_length: MAX_LINE_LENGTH }).split();
                     let responses        = reader.and_then(|req| Ok(req));
                     let server           = writer.send_all(responses).then(|_| Ok(()));
 
@@ -161,6 +164,7 @@ fn tcp_listener<'a>(handle: &'a Handle) -> impl Future<Item=(), Error=()> + 'a
         .then(|_| Ok(()))
 }
 
+#[cfg(unix)]
 mod signal {
     use futures::{Future, Stream};
     use tokio_core::reactor::Handle;
@@ -184,5 +188,23 @@ mod signal {
             .map(|_| info!("Received SIGTERM"));
 
         int.merge(term)
+    }
+}
+
+#[cfg(not(unix))]
+mod signal {
+    use futures::{Future, Stream};
+    use tokio_core::reactor::Handle;
+    use futures::future::empty;
+    use futures::stream::once;
+
+    pub fn reload(handle: &Handle) -> impl Stream
+    {
+        empty::<(), ()>().into_stream()
+    }
+
+    pub fn quit(handle: &Handle) -> impl Stream
+    {
+        empty::<(), ()>().into_stream()
     }
 }

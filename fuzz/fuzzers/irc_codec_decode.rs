@@ -11,8 +11,7 @@ use tokio_io::codec::Decoder;
 
 fuzz_target!(|data: &[u8]| {
     let mut buf = BytesMut::from(data);
-
-    let mut decoder = IrcCodec;
+    let mut decoder = IrcCodec{ max_line_length: 16 };
 
     while buf.len() > 0 {
         let _ = decoder.decode(&mut buf);

@@ -31,9 +31,11 @@ tokio-core    = "*"
 tokio-io      = "*"
 tokio-proto   = "*"
 tokio-service = "*"
-tokio-signal  = "*"
 libc          = "*"
 lazy_static   = "*"
+
+[target.'cfg(unix)'.dependencies]
+tokio-signal = "*"
 
 [dev-dependencies]
 rand              = "*"
